@@ -164,6 +164,148 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://g4alllf@github.io/2022/05/11/Linux_Learning/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.png">
+      <meta itemprop="name" content="bdfx-pike">
+      <meta itemprop="description" content="Welcome to my blog!">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="bdfx-pike's blog">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2022/05/11/Linux_Learning/" class="post-title-link" itemprop="url">Linux-Locking学习笔记</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2022-05-11 13:51:50 / 修改时间：13:53:47" itemprop="dateCreated datePublished" datetime="2022-05-11T13:51:50+08:00">2022-05-11</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/linux/" itemprop="url" rel="index"><span itemprop="name">linux</span></a>
+                </span>
+            </span>
+
+          
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="far fa-file-word"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>1.1k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="far fa-clock"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>1 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <blockquote>
+<p>Read the fucking source code! -- 鲁迅</p>
+</blockquote>
+<h2>semaphore 信号量</h2>
+<ul>
+<li>信号量常用于进程间同步问题</li>
+<li>信号量允许计数值大于1，也就是说允许多个进程进入临界区访问共享资源</li>
+<li>当计数值等于1时，只允许一个进程进入，此时信号量类似于互斥锁</li>
+<li>信号量不允许在中断处理中使用，因为其获取失败后会进入不可中断的睡眠状态，而中断不允许睡眠</li>
+</ul>
+<h3>信号量的实现</h3>
+<p>&emsp;1.信号量</p>
+<pre><code>    struct semaphore &#123;
+
+<pre><code>    raw_spinlock_t  lock;
+
+    unsigned intcount;
+
+    struct list_headwait_list;
+
+&#125;;
+</code></pre>
+<p></code></pre></p>
+<p>&emsp;信号量用结构semaphore描述，它在自旋锁的基础上改进而成，包括一个自旋锁、信号量计数器和一个等待队列。用户程序只能调用信号量API函数，而不能直接访问信号量结构。</p>
+<p>&emsp;2.初始化函数sema_init</p>
+<pre><code>    #define __SEMAPHORE_INITIALIZER(name, n)                \
+    &#123;                                   \
+
+<pre><code>   .lock        = __RAW_SPIN_LOCK_UNLOCKED((name).lock),    \
+
+   .count       = n,                        \
+
+   .wait_list   = LIST_HEAD_INIT((name).wait_list),     \
+
+&#125;
+
+static inline void sema_init(struct semaphore *sem, int val)
+&#123;
+
+   static struct lock_class_key __key;
+
+   *sem = (struct semaphore) __SEMAPHORE_INITIALIZER(*sem, val);
+
+   lockdep_init_map(&amp;amp;sem-&amp;gt;lock.dep_map, &amp;quot;semaphore-&amp;gt;lock&amp;quot;, &amp;amp;__key, 0);
+
+&#125;
+</code></pre>
+<p></code></pre></p>
+<p>&emsp;这里初始化了信号量中的spinlock结构，count计数器和初始化链表。</p>
+<p>&emsp;3.可中断获取信号量函数down_interruptible</p>
+<p>未完待续。。。。。。</p>
+<h2>Mutex 互斥锁</h2>
+<ul>
+<li>Mutex是用于互斥操作的同步原语</li>
+<li>互斥锁是一种休眠锁，锁争用时可能存在进程的睡眠和唤醒，context切换代价较高，适用于加锁时间较长的场景</li>
+<li>互斥锁每次只允许一个进程进入临界区</li>
+</ul>
+<h2>Spinlock 自旋锁</h2>
+<p>自旋锁一般用在临界区代码非常少的情况
+自旋锁通过busy-wait-loop
+自旋锁不允许睡眠（否则会出现死锁），无法获得锁时就会自旋等待</p>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://g4alllf@github.io/2022/03/02/Gates_Foundation/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -313,20 +455,20 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">1</span>
+          <span class="site-state-item-count">2</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
       <div class="site-state-item site-state-categories">
             <a href="/categories/">
           
-        <span class="site-state-item-count">1</span>
+        <span class="site-state-item-count">2</span>
         <span class="site-state-item-name">分类</span></a>
       </div>
       <div class="site-state-item site-state-tags">
             <a href="/tags/">
           
-        <span class="site-state-item-count">1</span>
+        <span class="site-state-item-count">2</span>
         <span class="site-state-item-name">标签</span></a>
       </div>
   </nav>
@@ -374,12 +516,12 @@
     <span class="post-meta-item-icon">
       <i class="fa fa-chart-area"></i>
     </span>
-    <span title="站点总字数">1k</span>
+    <span title="站点总字数">2k</span>
     <span class="post-meta-divider">|</span>
     <span class="post-meta-item-icon">
       <i class="fa fa-coffee"></i>
     </span>
-    <span title="站点阅读时长">1 分钟</span>
+    <span title="站点阅读时长">2 分钟</span>
 </div>
   <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
   </div>

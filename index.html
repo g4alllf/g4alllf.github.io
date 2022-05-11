@@ -189,7 +189,7 @@
               <span class="post-meta-item-text">发表于</span>
               
 
-              <time title="创建时间：2022-05-11 13:51:50 / 修改时间：13:53:47" itemprop="dateCreated datePublished" datetime="2022-05-11T13:51:50+08:00">2022-05-11</time>
+              <time title="创建时间：2022-05-11 13:51:50 / 修改时间：14:28:57" itemprop="dateCreated datePublished" datetime="2022-05-11T13:51:50+08:00">2022-05-11</time>
             </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -238,42 +238,11 @@
 </ul>
 <h3>信号量的实现</h3>
 <p>&emsp;1.信号量</p>
-<pre><code>    struct semaphore &#123;
-
-<pre><code>    raw_spinlock_t  lock;
-
-    unsigned intcount;
-
-    struct list_headwait_list;
-
-&#125;;
-</code></pre>
-<p></code></pre></p>
+<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">semaphore</span> &#123;</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">raw_spinlock_t</span>  lock;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">unsigned</span> intcount;</span><br><span class="line"></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">list_headwait_list</span>;</span></span><br><span class="line"></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure></div>
 <p>&emsp;信号量用结构semaphore描述，它在自旋锁的基础上改进而成，包括一个自旋锁、信号量计数器和一个等待队列。用户程序只能调用信号量API函数，而不能直接访问信号量结构。</p>
 <p>&emsp;2.初始化函数sema_init</p>
-<pre><code>    #define __SEMAPHORE_INITIALIZER(name, n)                \
-    &#123;                                   \
+<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> __SEMAPHORE_INITIALIZER(name, n)                \</span></span><br><span class="line"><span class="meta">&#123;                                   \</span></span><br><span class="line"><span class="meta"></span></span><br><span class="line">   .lock        = __RAW_SPIN_LOCK_UNLOCKED((name).lock),    \</span><br><span class="line"></span><br><span class="line">   .count       = n,                        \</span><br><span class="line"></span><br><span class="line">   .wait_list   = LIST_HEAD_INIT((name).wait_list),     \</span><br><span class="line"></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">void</span> sema_init(struct semaphore *sem, <span class="keyword">int</span> val)</span><br><span class="line">&#123;</span><br><span class="line"></span><br><span class="line">   <span class="keyword">static</span> struct lock_class_key __key;</span><br><span class="line"></span><br><span class="line">   *sem = (struct semaphore) __SEMAPHORE_INITIALIZER(*sem, val);</span><br><span class="line"></span><br><span class="line">   lockdep_init_map(&amp;amp;sem-&amp;gt;lock.dep_map, &amp;quot;semaphore-&amp;gt;lock&amp;quot;, &amp;amp;__key, <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></div>
 
-<pre><code>   .lock        = __RAW_SPIN_LOCK_UNLOCKED((name).lock),    \
-
-   .count       = n,                        \
-
-   .wait_list   = LIST_HEAD_INIT((name).wait_list),     \
-
-&#125;
-
-static inline void sema_init(struct semaphore *sem, int val)
-&#123;
-
-   static struct lock_class_key __key;
-
-   *sem = (struct semaphore) __SEMAPHORE_INITIALIZER(*sem, val);
-
-   lockdep_init_map(&amp;amp;sem-&amp;gt;lock.dep_map, &amp;quot;semaphore-&amp;gt;lock&amp;quot;, &amp;amp;__key, 0);
-
-&#125;
-</code></pre>
-<p></code></pre></p>
 <p>&emsp;这里初始化了信号量中的spinlock结构，count计数器和初始化链表。</p>
 <p>&emsp;3.可中断获取信号量函数down_interruptible</p>
 <p>未完待续。。。。。。</p>

@@ -255,6 +255,96 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://g4alllf@github.io/2022/05/12/rpc/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.png">
+      <meta itemprop="name" content="bdfx-pike">
+      <meta itemprop="description" content="Welcome to my blog!">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="bdfx-pike's blog">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2022/05/12/rpc/" class="post-title-link" itemprop="url">重造RPC轮子(持续更新)</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2022-05-12 14:17:04 / 修改时间：14:18:59" itemprop="dateCreated datePublished" datetime="2022-05-12T14:17:04+08:00">2022-05-12</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%AF%84%E7%BD%91/" itemprop="url" rel="index"><span itemprop="name">寄网</span></a>
+                </span>
+            </span>
+
+          
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="far fa-file-word"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>566</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="far fa-clock"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>1 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <h3>1.客户端</h3>
+<p>客户端分为client和clientStub两部分，前者负责发起请求，后者负责序列化/反序列化和建立与注册中心、服务端的连接</p>
+<p>从具体实现角度来看，在clientStub部分，需要设置两类套接字。一类套接字负责向注册中心请求可用服务器地址，另一类套接字负责请求目标服务器连接。同时，clientStub部分引入_thread模块，模拟多用户不同线程同时向server发送请求的情况。需要额外注意的是，clientStub需要引入异常处理机制：客户端在与服务端建立连接失败（包括超时的情况，这里需要手动设置超时时间）后再次向服务端发起连接请求，如果失败次数超过设定上限则重新向注册中心申请新的服务器地址，同时向用户显示错误信息。<br></br></p>
+<h3>2.注册中心</h3>
+<p>注册中心承接服务端和客户端，负责服务器列表的维护和用户服务器的分配。具体来说，注册中心在两个不同端口上分别设置了监听套接字，负责处理客户端和服务端发起的连接请求和注册请求。<br></br></p>
+<h3>3.服务端</h3>
+<p>服务端分为server和serverStub两部分，前者负责处理请求，后者负责序列化/反序列化和服务注册、监听来自客户端的连接请求。</p>
+<p>具体来看，server端设置了add，sub功能，可以根据传入的参数返回结果；serverStub则采用IO多路复用的方法处理客户端不同线程的请求。<br></br></p>
+<p>内容持续更新中......</p>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://g4alllf@github.io/2022/03/02/Gates_Foundation/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -410,20 +500,20 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">2</span>
+          <span class="site-state-item-count">3</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
       <div class="site-state-item site-state-categories">
             <a href="/categories/">
           
-        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-count">3</span>
         <span class="site-state-item-name">分类</span></a>
       </div>
       <div class="site-state-item site-state-tags">
             <a href="/tags/">
           
-        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-count">3</span>
         <span class="site-state-item-name">标签</span></a>
       </div>
   </nav>

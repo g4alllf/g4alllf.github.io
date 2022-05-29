@@ -29,11 +29,16 @@
 <meta property="og:site_name" content="bdfx-pike&#39;s blog">
 <meta property="og:description" content="Read the fucking source code! -- 鲁迅">
 <meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://g4alllf@github.io/2022/05/11/Linux_Learning/semaphore.png">
+<meta property="og:image" content="http://g4alllf@github.io/2022/05/11/Linux_Learning/spinlock1.png">
+<meta property="og:image" content="http://g4alllf@github.io/2022/05/11/Linux_Learning/MCS1.png">
+<meta property="og:image" content="http://g4alllf@github.io/2022/05/11/Linux_Learning/MCS2.png">
 <meta property="article:published_time" content="2022-05-11T05:51:50.096Z">
-<meta property="article:modified_time" content="2022-05-18T09:40:05.721Z">
+<meta property="article:modified_time" content="2022-05-29T05:58:10.911Z">
 <meta property="article:author" content="bdfx-pike">
 <meta property="article:tag" content="learning">
 <meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://g4alllf@github.io/2022/05/11/Linux_Learning/semaphore.png">
 
 <link rel="canonical" href="http://g4alllf@github.io/2022/05/11/Linux_Learning/">
 
@@ -198,7 +203,7 @@
                   <i class="far fa-calendar-check"></i>
                 </span>
                 <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2022-05-18 17:40:05" itemprop="dateModified" datetime="2022-05-18T17:40:05+08:00">2022-05-18</time>
+                <time title="修改时间：2022-05-29 13:58:10" itemprop="dateModified" datetime="2022-05-29T13:58:10+08:00">2022-05-29</time>
               </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -216,14 +221,14 @@
                 <i class="far fa-file-word"></i>
               </span>
                 <span class="post-meta-item-text">本文字数：</span>
-              <span>15k</span>
+              <span>28k</span>
             </span>
             <span class="post-meta-item" title="阅读时长">
               <span class="post-meta-item-icon">
                 <i class="far fa-clock"></i>
               </span>
                 <span class="post-meta-item-text">阅读时长 &asymp;</span>
-              <span>14 分钟</span>
+              <span>25 分钟</span>
             </span>
 
         </div>
@@ -239,6 +244,71 @@
 <p>Read the fucking source code! -- 鲁迅</p>
 </blockquote>
 <span id="more"></span>
+<h3>原子操作</h3>
+<h4>a. 读原子操作</h4>
+<p>&emsp;这个三个宏函数在不同架构下有不同的定义:</p>
+<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> ATOMIC_INIT(i)	&#123; (i) &#125;</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> atomic_read(v)	READ_ONCE((v)-&gt;counter)</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> atomic_set(v, i) WRITE_ONCE(((v)-&gt;counter), (i))</span></span><br></pre></td></tr></table></figure></div>
+<p>&emsp;例如WRITE_ONCE的定义在arm64定义如下</p>
+<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> WRITE_ONCE(x, val)				\</span></span><br><span class="line"><span class="meta">(&#123;							\</span></span><br><span class="line"><span class="meta">	union &#123; typeof(x) __val; char __c[1]; &#125; __u =	\</span></span><br><span class="line"><span class="meta">		&#123; .__val = (val) &#125;; 			\</span></span><br><span class="line"><span class="meta">	__write_once_size(&amp;(x), __u.__c, sizeof(x));	\</span></span><br><span class="line"><span class="meta">	__u.__val;					\</span></span><br><span class="line"><span class="meta">&#125;)</span></span><br></pre></td></tr></table></figure></div>
+<h4>b. 加、减、与、或、异或的无返回值原子操作</h4>
+<p>&emsp;这个操作在 include/asm-generic/atomic.h 中定义，具体实现如下：</p>
+<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> ATOMIC_OP(op, c_op)						\</span></span><br><span class="line"><span class="meta">static inline void atomic_##op(int i, atomic_t *v)			\</span></span><br><span class="line"><span class="meta">&#123;									\</span></span><br><span class="line"><span class="meta">	int c, old;							\</span></span><br><span class="line"><span class="meta">									\</span></span><br><span class="line"><span class="meta">	c = v-&gt;counter;							\</span></span><br><span class="line"><span class="meta">	while ((old = cmpxchg(&amp;v-&gt;counter, c, c c_op i)) != c)		\</span></span><br><span class="line"><span class="meta">		c = old;						\</span></span><br><span class="line"><span class="meta">&#125;</span></span><br><span class="line"></span><br><span class="line">ATOMIC_OP(add, +)</span><br><span class="line">ATOMIC_OP(sub, -)</span><br><span class="line"><span class="comment">// ...还有与、或、异或的类似定义</span></span><br></pre></td></tr></table></figure></div>
+<p>&emsp;这里用到的 cmpxchg 对应 x86 的 CMPXCHG 指令，但对于其他架构需要软件实现，下面会解释这个宏函数，atomic_t（原子变量）定义如下：</p>
+<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> &#123;</span></span><br><span class="line">	<span class="keyword">int</span> counter;</span><br><span class="line">&#125; <span class="keyword">atomic_t</span>;</span><br></pre></td></tr></table></figure></div>
+<h4>c. 加、减、与、或、异或的有返回值原子操作</h4>
+<p>&emsp;在 linux 中有两种带返回值的原子操作，一种是返回旧值（v）的：</p>
+<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> ATOMIC_FETCH_OP(op, c_op)					\</span></span><br><span class="line"><span class="meta">static inline int atomic_fetch_##op(int i, atomic_t *v)			\</span></span><br><span class="line"><span class="meta">&#123;									\</span></span><br><span class="line"><span class="meta">	int c, old;							\</span></span><br><span class="line"><span class="meta">									\</span></span><br><span class="line"><span class="meta">	c = v-&gt;counter;							\</span></span><br><span class="line"><span class="meta">	while ((old = cmpxchg(&amp;v-&gt;counter, c, c c_op i)) != c)		\</span></span><br><span class="line"><span class="meta">		c = old;						\</span></span><br><span class="line"><span class="meta">									\</span></span><br><span class="line"><span class="meta">	return c;							\</span></span><br><span class="line"><span class="meta">&#125;</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">ifndef</span> atomic_fetch_add</span></span><br><span class="line">ATOMIC_FETCH_OP(add, +)</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">ifndef</span> atomic_fetch_sub</span></span><br><span class="line">ATOMIC_FETCH_OP(sub, -)</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line"><span class="comment">// ...还有与、或、异或的类似定义</span></span><br></pre></td></tr></table></figure></div>
+<p>&emsp;另一种是返回新值的：</p>
+<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> ATOMIC_OP_RETURN(op, c_op)					\</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> ATOMIC_OP_RETURN(op, c_op)					\</span></span><br><span class="line"><span class="meta">static inline int atomic_##op##_return(int i, atomic_t *v)		\</span></span><br><span class="line"><span class="meta">&#123;									\</span></span><br><span class="line"><span class="meta">	unsigned long flags;						\</span></span><br><span class="line"><span class="meta">	int ret;							\</span></span><br><span class="line"><span class="meta">									\</span></span><br><span class="line"><span class="meta"><span class="comment">// 把当前中断状态（当前是否允许中断）保存到flags中并用禁止中断覆盖原状态</span></span></span><br><span class="line">	raw_local_irq_save(flags);					\</span><br><span class="line">	ret = (v-&gt;counter = v-&gt;counter c_op i);				\</span><br><span class="line"><span class="comment">// 把 flags 保存的状态恢复</span></span><br><span class="line">	raw_local_irq_restore(flags);					\</span><br><span class="line">									\</span><br><span class="line">	<span class="keyword">return</span> ret;							\</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">ifndef</span> atomic_add_return</span></span><br><span class="line">ATOMIC_OP_RETURN(add, +)</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">ifndef</span> atomic_sub_return</span></span><br><span class="line">ATOMIC_OP_RETURN(sub, -)</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br></pre></td></tr></table></figure></div>
+<p>&emsp;其中 raw_local_irq_save 和 restore 是 /tools/include/linux/irqflags.h 的系列宏函数，用来管理中断，save 用于把当前中断状态（当前是否允许中断）保存到flags中并用禁止中断覆盖原状态，restore 用于把 flags 保存的状态恢复。这两个宏函数是这样定义的：</p>
+<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> raw_local_irq_save(flags) ((flags) = 0)</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> raw_local_irq_restore(flags) ((void)(flags))</span></span><br></pre></td></tr></table></figure></div>
+<h4>d. 原子交换</h4>
+<p>&emsp;atomic_xchg 可以原子地把 v 的值放入 ptr 地址里， atomic_cmpxchg 功能类似，但会先比较两者值是否相等，若不等则把 new 的值放入 v 地址里， 然后返回 old 值。cmpxchg、xchg都使用了内联汇编，在后面2.a解释。</p>
+<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> atomic_xchg(ptr, v)		(xchg(&amp;(ptr)-&gt;counter, (v)))</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> atomic_cmpxchg(v, old, new)	(cmpxchg(&amp;((v)-&gt;counter), (old), (new)))</span></span><br></pre></td></tr></table></figure></div>
+<h4>e. 处理引用计数的原子操作函数</h4>
+<p>&emsp;atomic_add_unless 可以判断 v 里的值是否等于 u ，不等于则给 v 加上 a，返回操作是否完成。该函数使用了一些汇编代码完成。类似的函数还有 atomic_inc_not_zero 等。</p>
+<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">bool</span> <span class="title">atomic_add_unless</span><span class="params">(<span class="keyword">atomic_t</span> *v, <span class="keyword">int</span> a, <span class="keyword">int</span> u)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">return</span> atomic_fetch_add_unless(v, a, u) != u;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></div>
+<h4>f. 内嵌内存屏障原语的原子操作函数</h4>
+<p>&emsp;Linux内核提供了一组内嵌内存屏障原语的原子操作函数</p>
+{}\_relaxed：不内嵌内存屏障原语</br>
+{}\_acquire: 内置了加载-获取内存屏障原语</br>
+{}\_release: 内置了存储-释放内存屏障原语</br>
+<p>内存屏障具体实现在后面解释</p>
+<h4>g. cmpxchg() 函数</h4>
+<p>&emsp;这个函数在不同架构下实现方式不同，但是基本上都需要用到内联汇编代码，这里就不贴代码了。下面是x86和arm64的实现原理：</p>
+<p>&emsp;在x86架构下，汇编语言的程序中在一条指令前面加上前缀"LOCK"，经过汇编以后的机器代码就使CPU在执行这条指令的时候把#HLOCK pin的电位拉低，持续到这条指令结束时放开，从而把总线锁住，这样同一总线上别的CPU就暂时不能通过总线访问内存了，保证了这条指令在多处理器环境中的原子性。</p>
+<p>&emsp;在arm64架构下，cmpxchg最终会调用_CMPXHG_CASE()宏，使用内存屏障和cas系列指令配合，最终调用的指令是casal，用于加载-获取和储存-释放。这里的内存屏障是直接通过内联汇编控制CPU实现的，而没有用到封装好的内存屏障函数。</p>
+<h4>h. xchg() 函数</h4>
+<p>&emsp;与此函数类似的还有xchg(new, v)，用于把new赋值给原子变量v，返回原子变量v的旧值。</p>
+<h4>内存屏障</h4>
+<p>&emsp;本节的代码都是arm64架构的</p>
+<p>&emsp;|指令名|功能描述|</p>
+<p>&emsp;|-|-|</p>
+<p>&emsp;|DMB|数据存储屏障（Data Memory Barrier）。DMB指令保证：仅当所有在它前面的存储器访问操作都执行完毕后，才提交(commit)在它后面的存取访问操作指令。当位于此指令前的所有内存访问均完成时，DMB指令才会完成|</p>
+<p>&emsp;|DSB|数据同步屏障（Data synchronization Barrier）。比DMB要严格一些，仅当所有在它前面的存储访问操作指令都执行完毕后，才会执行在它后面的指令，即任何指令都要等待DSB前面的存储访问完成。位于此指令前的所有缓存，如分支预测和TLB维护操作全部完成|</p>
+<p>&emsp;|ISB|指令同步屏障（Instruction synchronization Barrier）。它最严格，冲洗流水线(Flush Pipeline)和预取buffer(prefetch buffers)后，才会从cache或者内存中预取ISB指令之后的指令。ISB通常用来保证上下文切换的效果，例如更改ASID(Address Space Identifier)、TLB维护操作和C15寄存器的修改等。|</p>
+<h4>barrier() 函数</h4>
+<p>&emsp;这个函数属于优化屏障（只是对编译器做提示），这个函数实际上只是一条空的asm语句（“memory”表示修改了内存），但是编译器会在barrier()之后刷新寄存器对变量的分配。CPU越过内存屏障后，将刷新自己对存储器的缓冲状态。</p>
+<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> barrier() __asm__ __volatile__(<span class="meta-string">&quot;&quot;</span>: : :<span class="meta-string">&quot;memory&quot;</span>)</span></span><br></pre></td></tr></table></figure></div>
+<h4>b. UP的读写内存屏障</h4>
+<p>&emsp;这三个函数主要是针对UP，但是也可以用于严格一致性的SMP系统。</p>
+<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> mb()		dsb(sy) <span class="comment">// 读写内存屏障</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> rmb()		dsb(ld) <span class="comment">// 读内存屏障</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> wmb()		dsb(st) <span class="comment">// 写内存屏障</span></span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> dsb(opt)	asm volatile(<span class="meta-string">&quot;dsb &quot;</span> #opt : : : <span class="meta-string">&quot;memory&quot;</span>)</span></span><br></pre></td></tr></table></figure></div>
+<p>&emsp;dsb是arm64的一条汇编指令，意为数据同步屏障指令。它的作用是等待所有前面的指令完成后再执行后面的指令。对于UP不存在内存一致性的问题(对汇编指令)，在UP上就是一个优化屏障，确保汇编代码和c代码的内存一致性</p>
+<h4>c. SMP的读写内存屏障</h4>
+<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> __smp_mb()	dmb(ish) <span class="comment">// 用于SMP的内存屏障</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> __smp_rmb()	dmb(ishld) <span class="comment">// 用于SMP的读内存屏障</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> __smp_wmb()	dmb(ishst) <span class="comment">// 用于SMP的写内存屏障</span></span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> dmb(opt)	asm volatile(<span class="meta-string">&quot;dmb &quot;</span> #opt : : : <span class="meta-string">&quot;memory&quot;</span>)</span></span><br></pre></td></tr></table></figure></div>
+<h4>d. 自旋等待的接口函数</h4>
+<p>&emsp;Linux内核提供了一个自旋等待的接口函数，它在排队自旋锁机制的实现中广泛应用smp_cond_load_relaxed()接口函数的定义如下。</p>
+<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> smp_cond_load_relaxed(ptr, cond_expr) (&#123;		\</span></span><br><span class="line"><span class="meta">	typeof(ptr) __PTR = (ptr);				\</span></span><br><span class="line"><span class="meta">	typeof(*ptr) VAL;					\</span></span><br><span class="line"><span class="meta">	for (;;) &#123;						\</span></span><br><span class="line"><span class="meta">		VAL = READ_ONCE(*__PTR);			\</span></span><br><span class="line"><span class="meta">		<span class="meta-keyword">if</span> (cond_expr)					\</span></span><br><span class="line"><span class="meta">			break;					\</span></span><br><span class="line"><span class="meta">		cpu_relax();					\</span></span><br><span class="line"><span class="meta">	&#125;							\</span></span><br><span class="line"><span class="meta">	VAL;							\</span></span><br><span class="line"><span class="meta">&#125;)</span></span><br></pre></td></tr></table></figure></div>
+<p>&emsp;该函数有两个参数，第一个参数ptr表示要加载的地址，第二个参数是判断条件，因此该函数会一直原子地加载并判断条件是否成立。 另外，该函数还有一个变体--smp_cond_load_acquire()。二者的区别是在 smp_cond_load_relaxed()函数执行完成之后插入一条加载一获取内存屏障指令，而smp_cond_load_relaxed()函数没有隐含任何的内存屏障指令。</p>
+<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> smp_cond_load_acquire(ptr, cond_expr) (&#123;		\</span></span><br><span class="line"><span class="meta">	typeof(*ptr) _val;					\</span></span><br><span class="line"><span class="meta">	_val = smp_cond_load_relaxed(ptr, cond_expr);		\</span></span><br><span class="line"><span class="meta">	smp_acquire__after_ctrl_dep();				\</span></span><br><span class="line"><span class="meta">	_val;							\</span></span><br><span class="line"><span class="meta">&#125;)</span></span><br></pre></td></tr></table></figure></div>
+<h4>d. 原子变量接口函数</h4>
+<p>&emsp;Linux内核提供了两个与原子变量相关的接口函数。</p>
+<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">smp_mb__before_atomic</span><span class="params">(<span class="keyword">void</span>)</span></span>;</span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">smp_mb__after_atomic</span><span class="params">(<span class="keyword">void</span>)</span></span>;</span><br></pre></td></tr></table></figure></div>
+<p>&emsp;这两个接口函数用在没有返回值的原子操作函数中，如 atomic_add()函数、 atomic_dec()图数等，特别适用引用计数递增或者递减的场景。通常原子操作函数是没有隐含内存屏障的。下面是一个使用 smp_mb_before_atomico函数的例子。</p>
+<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">obj-&gt;dead = <span class="number">1</span>;</span><br><span class="line">smp_mb__before_atomic();</span><br><span class="line">atomic_dec(&amp;obi-&gt;ref_count);</span><br></pre></td></tr></table></figure></div>
+<p>&emsp;smp_mb__before_atomic()函数用于保证所有的内存操作在递减obj->ref_count之前都已经完成，确保其他CPU观察到这些变化--在递减obj->ref_count之前己经把obj->dead设置为1了</p>
+
+
 <h3>semaphore 信号量</h3>
 <ul>
 <li>信号量允许计数值大于1，也就是说允许多个进程进入临界区访问共享资源。当计数值等于1时，只允许一个进程进入，此时信号量类似于互斥锁</li>
@@ -246,42 +316,194 @@
 <li>由于争用信号量的进程在等待锁重新变为可用时会睡眠，所以信号量适用于锁会被长期持有的情况</li>
 <li>信号量可以由一个线程释放，另一个线程得到，所以信号量可以用于线程的同步</li>
 </ul>
+
+<p><img src="/2022/05/11/Linux_Learning/semaphore.png"></p>
 <h4>信号量的实现</h4>
 <p>&emsp;<strong>1.信号量结构</strong></p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">semaphore</span> &#123;</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">raw_spinlock_t</span>  lock;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">unsigned</span> intcount;</span><br><span class="line"></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">list_headwait_list</span>;</span></span><br><span class="line"></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure></div>
+'''c
+    struct semaphore {
 
+<pre><code>    raw_spinlock_t  lock;
+
+    unsigned intcount;
+
+    struct list_headwait_list;
+
+&#125;;
+</code></pre>
+<p>‘’’</p>
 <p>&emsp;信号量用结构semaphore描述，它在自旋锁的基础上改进而成，包括一个自旋锁、信号量计数器和一个等待队列。用户程序只能调用信号量API函数，而不能直接访问信号量结构。<br></br></p>
 <p>&emsp;<strong>2.初始化函数sema_init</strong></p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> __SEMAPHORE_INITIALIZER(name, n)                \</span></span><br><span class="line"><span class="meta">&#123;                                   \</span></span><br><span class="line"><span class="meta"></span></span><br><span class="line">   .lock        = __RAW_SPIN_LOCK_UNLOCKED((name).lock),    \</span><br><span class="line"></span><br><span class="line">   .count       = n,                        \</span><br><span class="line"></span><br><span class="line">   .wait_list   = LIST_HEAD_INIT((name).wait_list),     \</span><br><span class="line"></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">void</span> sema_init(struct semaphore *sem, <span class="keyword">int</span> val)</span><br><span class="line">&#123;</span><br><span class="line"></span><br><span class="line">   <span class="keyword">static</span> struct lock_class_key __key;</span><br><span class="line"></span><br><span class="line">   *sem = (struct semaphore) __SEMAPHORE_INITIALIZER(*sem, val);</span><br><span class="line"></span><br><span class="line">   lockdep_init_map(&amp;amp;sem-&amp;gt;lock.dep_map, &amp;quot;semaphore-&amp;gt;lock&amp;quot;, &amp;amp;__key, <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></div>
+'''c
+    #define __SEMAPHORE_INITIALIZER(name, n)                \
+    {                                   \
 
+<pre><code>   .lock        = __RAW_SPIN_LOCK_UNLOCKED((name).lock),    \
+
+   .count       = n,                        \
+
+   .wait_list   = LIST_HEAD_INIT((name).wait_list),     \
+
+&#125;
+
+static inline void sema_init(struct semaphore *sem, int val)
+&#123;
+
+   static struct lock_class_key __key;
+
+   *sem = (struct semaphore) __SEMAPHORE_INITIALIZER(*sem, val);
+
+   lockdep_init_map(&amp;amp;sem-&amp;gt;lock.dep_map, &amp;quot;semaphore-&amp;gt;lock&amp;quot;, &amp;amp;__key, 0);
+
+&#125;
+</code></pre>
+<p>‘’’</p>
 <p>&emsp;这里初始化了信号量中的spinlock结构，count计数器和初始化链表。</p>
 <p>&emsp;可以通过如下方式静态地声明信号量：</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">semaphore</span> <span class="title">name</span>;</span></span><br><span class="line">sema_init(&amp;amp;name, count);</span><br></pre></td></tr></table></figure></div>
+'''c
+    struct semaphore name;
 
+<pre><code>sema_init(&amp;amp;name, count);
+</code></pre>
+<p>‘’’</p>
 <p><br></br>&emsp;<strong>3.PV操作</strong></p>
 <p>&emsp;信号量支持两个原子操作P( )和V( )，前者是测试操作，而后者是增加操作。Linux把这两种操作分别成为down( )和up( )。</p>
 <p>&emsp;down( )操作通过对信号量计数减1来请求获得一个信号量，如果结果是0或者大于0，获得信号量锁，任务就可以进入临界区。如果结果是负数，任务会被放入等待队列，处理器执行其它任务。与之相反，当临界区操作完成后，up( )操作会释放信号量，增加信号量的计数值。如果在该信号量上的等待队列不为空，则处于队列中等待的任务在被唤醒的同时会获得该信号量。<br></br></p>
 <p>&emsp;<strong>4.使用信号量</strong></p>
 <p>&emsp;信号量的使用有如下几种方法：</p>
 <p>&emsp;以计数值1初始化动态创建的信号量：</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">init_MUTEX(struct semaphore*)</span><br></pre></td></tr></table></figure></div>
+'''c
+    init_MUTEX(struct semaphore*)
+'''
 
 <p>&emsp;以计数值0初始化动态创建的信号量(初始化为加锁状态):</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">init_MUTEX_LOCKED(struct semaphore*)</span><br></pre></td></tr></table></figure></div>
+'''c
+    init_MUTEX_LOCKED(struct semaphore*)
+'''
 
 <p>&emsp;试图获得指定的信号量sem，如果信号量已被争用，则进入可中断的睡眠状态TASK_INTERRUPTIBLE并返回-EINTR，否则返回0:</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">down_interruptible</span><span class="params">(struct semaphore *sem)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> flags;</span><br><span class="line">    <span class="keyword">int</span> result = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    might_sleep();</span><br><span class="line">    raw_spin_lock_irqsave(&amp;amp;sem-&amp;gt;lock, flags);</span><br><span class="line">    <span class="keyword">if</span> (likely(sem-&amp;gt;count &amp;gt; <span class="number">0</span>))</span><br><span class="line">        sem-&amp;gt;count--;</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">        result = __down_interruptible(sem);</span><br><span class="line">    raw_spin_unlock_irqrestore(&amp;amp;sem-&amp;gt;lock, flags);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> result;</span><br><span class="line">&#125;</span><br><span class="line">EXPORT_SYMBOL(down_interruptible);</span><br><span class="line"></span><br><span class="line">__down_interruptible(struct semaphore *sem)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">return</span> __down_common(sem, TASK_INTERRUPTIBLE, MAX_SCHEDULE_TIMEOUT);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">int</span> __sched __down_common(struct semaphore *sem, <span class="keyword">long</span> state,</span><br><span class="line">                                <span class="keyword">long</span> timeout)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">semaphore_waiter</span> <span class="title">waiter</span>;</span></span><br><span class="line"></span><br><span class="line">    list_add_tail(&amp;amp;waiter.<span class="built_in">list</span>, &amp;amp;sem-&amp;gt;wait_list);</span><br><span class="line">    waiter.task = current;</span><br><span class="line">    waiter.up = <span class="literal">false</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (;;) &#123;</span><br><span class="line">        <span class="keyword">if</span> (signal_pending_state(state, current))</span><br><span class="line">            <span class="keyword">goto</span> interrupted;</span><br><span class="line">        <span class="keyword">if</span> (unlikely(timeout &amp;lt;= <span class="number">0</span>))</span><br><span class="line">            <span class="keyword">goto</span> timed_out;</span><br><span class="line">        __set_current_state(state);</span><br><span class="line">        raw_spin_unlock_irq(&amp;amp;sem-&amp;gt;lock);</span><br><span class="line">        timeout = schedule_timeout(timeout);</span><br><span class="line">        raw_spin_lock_irq(&amp;amp;sem-&amp;gt;lock);</span><br><span class="line">        <span class="keyword">if</span> (waiter.up)</span><br><span class="line">            <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"> timed_out:</span><br><span class="line">    list_del(&amp;amp;waiter.<span class="built_in">list</span>);</span><br><span class="line">    <span class="keyword">return</span> -ETIME;</span><br><span class="line"></span><br><span class="line"> interrupted:</span><br><span class="line">    list_del(&amp;amp;waiter.<span class="built_in">list</span>);</span><br><span class="line">    <span class="keyword">return</span> -EINTR;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></div>
+'''c
+    int down_interruptible(struct semaphore *sem)
+    {
+        unsigned long flags;
+        int result = 0;
 
+<pre><code>    might_sleep();
+    raw_spin_lock_irqsave(&amp;amp;sem-&amp;gt;lock, flags);
+    if (likely(sem-&amp;gt;count &amp;gt; 0))
+        sem-&amp;gt;count--;
+    else
+        result = __down_interruptible(sem);
+    raw_spin_unlock_irqrestore(&amp;amp;sem-&amp;gt;lock, flags);
+
+    return result;
+&#125;
+EXPORT_SYMBOL(down_interruptible);
+
+__down_interruptible(struct semaphore *sem)
+&#123;
+    return __down_common(sem, TASK_INTERRUPTIBLE, MAX_SCHEDULE_TIMEOUT);
+&#125;
+
+static inline int __sched __down_common(struct semaphore *sem, long state,
+                                long timeout)
+&#123;
+    struct semaphore_waiter waiter;
+
+    list_add_tail(&amp;amp;waiter.list, &amp;amp;sem-&amp;gt;wait_list);
+    waiter.task = current;
+    waiter.up = false;
+
+    for (;;) &#123;
+        if (signal_pending_state(state, current))
+            goto interrupted;
+        if (unlikely(timeout &amp;lt;= 0))
+            goto timed_out;
+        __set_current_state(state);
+        raw_spin_unlock_irq(&amp;amp;sem-&amp;gt;lock);
+        timeout = schedule_timeout(timeout);
+        raw_spin_lock_irq(&amp;amp;sem-&amp;gt;lock);
+        if (waiter.up)
+            return 0;
+    &#125;
+
+ timed_out:
+    list_del(&amp;amp;waiter.list);
+    return -ETIME;
+
+ interrupted:
+    list_del(&amp;amp;waiter.list);
+    return -EINTR;
+&#125;
+</code></pre>
+<p>‘’’</p>
 <p>&emsp;试图获得指定的信号量sem，如果信号量已被争用，则进入不可中断睡眠状态TASK_UNINTERRUPTIBLE：</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">down</span><span class="params">(struct semaphore *sem)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> flags;</span><br><span class="line"></span><br><span class="line">    might_sleep();</span><br><span class="line">    raw_spin_lock_irqsave(&amp;amp;sem-&amp;gt;lock, flags);</span><br><span class="line">    <span class="keyword">if</span> (likely(sem-&amp;gt;count &amp;gt; <span class="number">0</span>))</span><br><span class="line">        sem-&amp;gt;count--;</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">        __down(sem);</span><br><span class="line">    raw_spin_unlock_irqrestore(&amp;amp;sem-&amp;gt;lock, flags);</span><br><span class="line">&#125;</span><br><span class="line">EXPORT_SYMBOL(down);</span><br></pre></td></tr></table></figure></div>
+'''c
+    void down(struct semaphore *sem)
+    {
+        unsigned long flags;
 
+<pre><code>    might_sleep();
+    raw_spin_lock_irqsave(&amp;amp;sem-&amp;gt;lock, flags);
+    if (likely(sem-&amp;gt;count &amp;gt; 0))
+        sem-&amp;gt;count--;
+    else
+        __down(sem);
+    raw_spin_unlock_irqrestore(&amp;amp;sem-&amp;gt;lock, flags);
+&#125;
+EXPORT_SYMBOL(down);
+</code></pre>
+<p>‘’’</p>
 <p>&emsp;官方并不建议使用上面这个方法，原因是这个方法会导致进程在等待信号的时候不会再进行响应。</p>
 <p>&emsp;试图以堵塞的方法获得指定的信号量sem，如果信号量已被争用，则立刻返回1，反之则返回0并使调用方法的进程成功持有信号量锁：</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">down_trylock</span><span class="params">(struct semaphore *sem)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> flags;</span><br><span class="line">    <span class="keyword">int</span> count;</span><br><span class="line"></span><br><span class="line">    raw_spin_lock_irqsave(&amp;amp;sem-&amp;gt;lock, flags);</span><br><span class="line">    count = sem-&amp;gt;count - <span class="number">1</span>;</span><br><span class="line">    <span class="keyword">if</span> (likely(count &amp;gt;= <span class="number">0</span>))</span><br><span class="line">        sem-&amp;gt;count = count;</span><br><span class="line">    raw_spin_unlock_irqrestore(&amp;amp;sem-&amp;gt;lock, flags);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> (count &amp;lt; <span class="number">0</span>);</span><br><span class="line">&#125;</span><br><span class="line">EXPORT_SYMBOL(down_trylock);</span><br></pre></td></tr></table></figure></div>
+'''c
+    int down_trylock(struct semaphore *sem)
+    {
+        unsigned long flags;
+        int count;
 
+<pre><code>    raw_spin_lock_irqsave(&amp;amp;sem-&amp;gt;lock, flags);
+    count = sem-&amp;gt;count - 1;
+    if (likely(count &amp;gt;= 0))
+        sem-&amp;gt;count = count;
+    raw_spin_unlock_irqrestore(&amp;amp;sem-&amp;gt;lock, flags);
+
+    return (count &amp;lt; 0);
+&#125;
+EXPORT_SYMBOL(down_trylock);
+</code></pre>
+<p>‘’’</p>
 <p>&emsp;释放指定的信号量，如果睡眠队列不空，则唤醒其中一个任务：</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">up</span><span class="params">(struct semaphore *sem)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> flags;</span><br><span class="line"></span><br><span class="line">    raw_spin_lock_irqsave(&amp;amp;sem-&amp;gt;lock, flags);</span><br><span class="line">    <span class="keyword">if</span> (likely(list_empty(&amp;amp;sem-&amp;gt;wait_list)))</span><br><span class="line">        sem-&amp;gt;count++;</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">        __up(sem);</span><br><span class="line">    raw_spin_unlock_irqrestore(&amp;amp;sem-&amp;gt;lock, flags);</span><br><span class="line">&#125;</span><br><span class="line">EXPORT_SYMBOL(up);</span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">semaphore_waiter</span> &#123;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">list_head</span> <span class="title">list</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">task_struct</span> *<span class="title">task</span>;</span></span><br><span class="line">    <span class="keyword">bool</span> up;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">static</span> noinline <span class="keyword">void</span> __sched __up(struct semaphore *sem)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">semaphore_waiter</span> *<span class="title">waiter</span> =</span> list_first_entry(&amp;amp;sem-&amp;gt;wait_list,</span><br><span class="line">                        struct semaphore_waiter, <span class="built_in">list</span>);</span><br><span class="line">    list_del(&amp;amp;waiter-&amp;gt;<span class="built_in">list</span>);</span><br><span class="line">    waiter-&amp;gt;up = <span class="literal">true</span>;</span><br><span class="line">    wake_up_process(waiter-&amp;gt;task);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></div>
+'''c
+    void up(struct semaphore *sem)
+    {
+        unsigned long flags;
 
+<pre><code>    raw_spin_lock_irqsave(&amp;amp;sem-&amp;gt;lock, flags);
+    if (likely(list_empty(&amp;amp;sem-&amp;gt;wait_list)))
+        sem-&amp;gt;count++;
+    else
+        __up(sem);
+    raw_spin_unlock_irqrestore(&amp;amp;sem-&amp;gt;lock, flags);
+&#125;
+EXPORT_SYMBOL(up);
+
+struct semaphore_waiter &#123;
+    struct list_head list;
+    struct task_struct *task;
+    bool up;
+&#125;;
+
+static noinline void __sched __up(struct semaphore *sem)
+&#123;
+    struct semaphore_waiter *waiter = list_first_entry(&amp;amp;sem-&amp;gt;wait_list,
+                        struct semaphore_waiter, list);
+    list_del(&amp;amp;waiter-&amp;gt;list);
+    waiter-&amp;gt;up = true;
+    wake_up_process(waiter-&amp;gt;task);
+&#125;
+</code></pre>
+<p>‘’’</p>
 <p>&emsp;附注：上述方法中调用EXPORT_SYMBOL的目的是为了保存符号对应的地址，当内核运行时，可以找到这些符号对应的地址。EXPORT_SYMBOL标签内定义的函数或者符号对全部内核代码公开，不用修改内核代码就可以将一个函数以符号的方式导出给其它模块使用。<br></br></p>
 <h3>Spinlock 自旋锁</h3>
 <ul>
@@ -290,50 +512,500 @@
 <li>自旋锁不允许睡眠（否则会出现死锁），无法获得锁时就会自旋等待</li>
 <li>拥有自旋锁的临界区代码必须原子地执行，不能休眠和主动调度</li>
 </ul>
+
+<p><img src="/2022/05/11/Linux_Learning/spinlock1.png"></p>
 <p>&emsp;1.Spinlock数据结构</p>
 <p>早期Linux内核Spinlock定义：</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">spinlock</span> &#123;</span></span><br><span class="line">    <span class="class"><span class="keyword">union</span> &#123;</span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">raw_spinlock</span> <span class="title">rlock</span>;</span></span><br><span class="line">    &#125;;</span><br><span class="line">&#125; <span class="keyword">spinlock_t</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">raw_spinlock</span> &#123;</span></span><br><span class="line">    <span class="keyword">arch_spinlock_t</span> raw_lock;</span><br><span class="line">&#125; <span class="keyword">raw_spinlock_t</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> &#123;</span></span><br><span class="line">    <span class="class"><span class="keyword">union</span> &#123;</span></span><br><span class="line">        u32 slock;  <span class="comment">//若slock值为1表示锁未被持有，为0表示锁被持有</span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> __<span class="title">raw_tickets</span> &#123;</span></span><br><span class="line">            u16 owner;</span><br><span class="line">            u16 next;</span><br><span class="line">        &#125; tickets;</span><br><span class="line">    &#125;s;</span><br><span class="line">&#125; <span class="keyword">arch_spinlock_t</span></span><br></pre></td></tr></table></figure></div>
+'''c
+    typedef struct spinlock {
+        union {
+            struct raw_spinlock rlock;
+        };
+    } spinlock_t;
 
+<pre><code>typedef struct raw_spinlock &#123;
+    arch_spinlock_t raw_lock;
+&#125; raw_spinlock_t;
+
+typedef struct &#123;
+    union &#123;
+        u32 slock;  //若slock值为1表示锁未被持有，为0表示锁被持有
+        struct __raw_tickets &#123;
+            u16 owner;
+            u16 next;
+        &#125; tickets;
+    &#125;s;
+&#125; arch_spinlock_t
+</code></pre>
+<p>‘’’</p>
 <p>自旋锁的原型定义：</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">void</span> <span class="title">spin_lock</span><span class="params">(<span class="keyword">spinlock_t</span> *lock)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    raw_spin_lock(&amp;amp;lock-&amp;gt;rlock);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">void</span> __raw_spin_lock(<span class="keyword">raw_spinlock_t</span> *lock)</span><br><span class="line">&#123;</span><br><span class="line">    preempt_disable();</span><br><span class="line">    spin_acquire(&amp;amp;lock-&amp;gt;deep_map, <span class="number">0</span>, <span class="number">0</span>, _RET_IP_);</span><br><span class="line">    LOCK_CONTENDED(lock, do_raw_spin_trylock, do_raw_spin_lock);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></div>
+'''c
+    static inline void spin_lock(spinlock_t *lock)
+    {
+        raw_spin_lock(&amp;lock-&gt;rlock);
+    }
 
-<p>&emsp;在上述方法中，preempt_disable( )的作用是保证自旋锁临界区不发生抢占。不让自旋锁临界区发生抢占的原因是抢占调度会导致持有锁的进程睡眠，与自旋锁的设计原则违背，同时抢占调度进程会申请自旋锁，可能导致死锁的发生。值得注意的是，在没有更新实时补丁的Linux内核当中，spi_lock( )函数可以直接调用raw_spin_lock( )，而在更新了实时补丁的Linux内核当中，spin_lock( )则会变为可抢占和睡眠的锁。因此在绝对不允许抢占和睡眠的临界区，应该使用raw_spin_lock( )函数。</p>
-<p>&emsp;上述方法的末尾，LOCK_CONTENTED调用了do_raw_spin_lock和do_raw_spin_trylock：</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">void</span> <span class="title">do_raw_spin_lock</span><span class="params">(<span class="keyword">raw_spinlock_t</span> *lock)</span> __<span class="title">acquires</span><span class="params">(lock)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    __acquire(lock);</span><br><span class="line">    arch_spin_lock(&amp;amp;lock-&amp;gt;raw_lock);</span><br><span class="line">    mmiowb_spin_lock();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">int</span> <span class="title">do_raw_spin_trylock</span><span class="params">(<span class="keyword">raw_spinlock_t</span> *lock)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">int</span> ret = arch_spin_trylock(&amp;amp;(lock)-&amp;gt;raw_lock);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (ret)</span><br><span class="line">        mmiowb_spin_lock();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> ret;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></div>
+<pre><code>static inline void __raw_spin_lock(raw_spinlock_t *lock)
+&#123;
+    preempt_disable();
+    spin_acquire(&amp;amp;lock-&amp;gt;deep_map, 0, 0, _RET_IP_);
+    LOCK_CONTENDED(lock, do_raw_spin_trylock, do_raw_spin_lock);
+&#125;
+</code></pre>
+<p>‘’’</p>
+<p>&emsp;在上述方法中，preempt_disable( )的作用是保证自旋锁临界区不发生抢占。不让自旋锁临界区发生抢占的原因是抢占调度会导致持有锁的进程睡眠，与自旋锁的设计原则违背，同时抢占调度进程会申请自旋锁，可能导致死锁的发生。值得注意的是，在没有更新实时补丁的Linux内核当中，spin_lock( )函数可以直接调用raw_spin_lock( )，而在更新了实时补丁的Linux内核当中，spin_lock( )则会变为可抢占和睡眠的锁。因此在绝对不允许抢占和睡眠的临界区，应该使用raw_spin_lock( )函数。</p>
+<p>&emsp;上述方法的末尾，LOCK_CONTENDED调用了do_raw_spin_lock和do_raw_spin_trylock:</p>
+'''c
+    static inline void do_raw_spin_lock(raw_spinlock_t *lock) __acquires(lock)
+    {
+        __acquire(lock);
+        arch_spin_lock(&amp;lock-&gt;raw_lock);
+        mmiowb_spin_lock();
+    }
 
+<pre><code>static inline int do_raw_spin_trylock(raw_spinlock_t *lock)
+&#123;
+    int ret = arch_spin_trylock(&amp;amp;(lock)-&amp;gt;raw_lock);
+
+    if (ret)
+        mmiowb_spin_lock();
+
+    return ret;
+&#125;
+</code></pre>
+<p>‘’’</p>
 <p>&emsp;在这里，两个函数分别调用了arch_spin_lock和arch_spin_trylock，它们的实现机制类似于后文中spinlock的实现代码，主要是通过实现自动排队、判断锁是否被持有来进行相关操作，这里就不重复分析了。</p>
 <p>&emsp;在普通自旋锁中，如果在临界区内发生了外部硬件中断，则系统会暂停当前进程的执行而处理该中断。在这种情况下，如果中断处理机制也需要对临界区进行操作，那么在操作之前会调用spinlock函数来保护该临界区。此时，由于中断处理程序会试图获取该自旋锁，而该自旋锁往往已经被其它CPU持有，故中断处理程序会进入忙等状态或者wfe睡眠状态。在这种情况下，自旋锁的持有者因为被中断打断而不能尽快释放锁，而中断处理程序一直在忙等该锁，从而会产生死锁。为了解决这一问题，Linux内核引入了自旋锁的变体spin_lock_irq()：</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> __always_inline <span class="keyword">void</span> <span class="title">spin_lock_irq</span><span class="params">(<span class="keyword">spinlock_t</span> *lock)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    raw_spin_lock_irq(&amp;amp;lock-&amp;gt;rlock);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">void</span> __raw_spin_lock_irq(<span class="keyword">raw_spinlock_t</span> *lock)</span><br><span class="line">&#123;</span><br><span class="line">    local_irq_disable();</span><br><span class="line">    preempt_disable();</span><br><span class="line">    do_raw_spin_lock();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></div>
+'''c
+    static __always_inline void spin_lock_irq(spinlock_t *lock)
+    {
+        raw_spin_lock_irq(&amp;lock-&gt;rlock);
+    }
 
+<pre><code>static inline void __raw_spin_lock_irq(raw_spinlock_t *lock)
+&#123;
+    local_irq_disable();
+    preempt_disable();
+    do_raw_spin_lock();
+&#125;
+</code></pre>
+<p>‘’’</p>
 <p>&emsp;在上述方法中，首先调用了local_irq_disable( )来关闭本地处理器中断，这样在获取自旋锁时可以确保不会发生中断，从而避免了死锁，之后，再分别调用preempt_disable( )和do_raw_spin_lock( )分别来关闭内核抢占和获取spinlock。当然，当外部中断产生时，除了本地CPU之外的其它CPU依然可能会响应中断并试图去获取spinlock。此时，持有spinlock的本地CPU还在继续执行，从而会很快离开临界区释放锁，这样试图获取spinlock的CPU就可以很快获得该锁。</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> spin_lock_irqsave(lock, flags)              \</span></span><br><span class="line"><span class="meta">do &#123;                                \</span></span><br><span class="line"><span class="meta">    raw_spin_lock_irqsave(spinlock_check(lock), flags); \</span></span><br><span class="line"><span class="meta">&#125; while (0)</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> raw_spin_lock_irqsave(lock, flags)      \</span></span><br><span class="line"><span class="meta">    do &#123;                        \</span></span><br><span class="line"><span class="meta">        typecheck(unsigned long, flags);    \</span></span><br><span class="line"><span class="meta">        _raw_spin_lock_irqsave(lock, flags);    \</span></span><br><span class="line"><span class="meta">    &#125; while (0)</span></span><br></pre></td></tr></table></figure></div>
+'''c
+    #define spin_lock_irqsave(lock, flags)              \
+    do {                                \
+        raw_spin_lock_irqsave(spinlock_check(lock), flags); \
+    } while (0)
 
+<pre><code>#define raw_spin_lock_irqsave(lock, flags)      \
+    do &#123;                        \
+        typecheck(unsigned long, flags);    \
+        _raw_spin_lock_irqsave(lock, flags);    \
+    &#125; while (0)
+</code></pre>
+<p>‘’’</p>
 <p>&emsp;spin_lock_irqsave的功能是保存本地CPU当前的中断状态并且关闭本地CPU中断，然后获取自旋锁。这样做的好处在于，如果在外部硬件中断发生之前本地CPU已经关闭中断，那么如果调用了spin_lock_irq，本地CPU会重新允许中断，这样的情况显然是不被允许的。而如果调用了spin_lock_irqsave，那么在进行相关中断开启/关闭之前首先会检查是否允许中断(flags)，这样就避免了重新开启本地CPU中断情况的发生。</p>
 <p>&emsp;spinlock的主要实现方式有三种：CAS，Ticket Spinlock以及MCS lock。下面分析这三种形式：</p>
 <p>&emsp;<strong>1.CAS</strong></p>
 <p>&emsp;CAS意思是compare and swap，即比较并交换。</p>
 <p>&emsp;原子比较交换的伪代码如下：</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">compare_swap</span> <span class="params">(<span class="keyword">int</span> *ptr, <span class="keyword">int</span> expected, <span class="keyword">int</span> <span class="keyword">new</span>)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">Int actual = *ptr;</span><br><span class="line"><span class="keyword">if</span> (actual == expected) &#123;</span><br><span class="line">*ptr = <span class="keyword">new</span>;</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">return</span> actual;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></div>
+'''c
+    int compare_swap (int *ptr, int expected, int new)
+    {
+    Int actual = *ptr;
+    if (actual == expected) {
+    *ptr = new;
+    }
+    return actual;
+    }
+'''
 
 <p>&emsp;在spinlock中：</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">void</span> <span class="title">arch_spin_lock</span><span class="params">(<span class="keyword">arch_spinlock_t</span> *lock)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">while</span> (!__sl_cas(&amp;amp;lock-&amp;gt;lock, <span class="number">1</span>, <span class="number">0</span>));</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">unsigned</span> __sl_cas(<span class="keyword">volatile</span> <span class="keyword">unsigned</span> *p, <span class="keyword">unsigned</span> old, <span class="keyword">unsigned</span> <span class="keyword">new</span>)</span><br><span class="line">&#123;</span><br><span class="line">    __asm__ __volatile__(&amp;quot;cas.l %<span class="number">1</span>,%<span class="number">0</span>,@r0&amp;quot;</span><br><span class="line">        : &amp;quot;+r&amp;quot;(<span class="keyword">new</span>)</span><br><span class="line">        : &amp;quot;r&amp;quot;(old), &amp;quot;z&amp;quot;(p)</span><br><span class="line">        : &amp;quot;t&amp;quot;, &amp;quot;memory&amp;quot; );</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></div>
+'''c
+    static inline void arch_spin_lock(arch_spinlock_t *lock)
+    {
+        while (!__sl_cas(&amp;lock-&gt;lock, 1, 0));
+    }
 
+<pre><code>static inline unsigned __sl_cas(volatile unsigned *p, unsigned old, unsigned new)
+&#123;
+    __asm__ __volatile__(&amp;quot;cas.l %1,%0,@r0&amp;quot;
+        : &amp;quot;+r&amp;quot;(new)
+        : &amp;quot;r&amp;quot;(old), &amp;quot;z&amp;quot;(p)
+        : &amp;quot;t&amp;quot;, &amp;quot;memory&amp;quot; );
+    return new;
+&#125;
+</code></pre>
+<p>‘’’</p>
 <p>&emsp;上述方法中，p为当前内存值，指向spinlock的内存地址；old为旧的预期值，new为新的要修改的值，如果预期值old与内存值p相同时，说明持有spinlock的CPU已经释放了锁，故将p值修改为new，否则什么都不做。从spinlock的角度来看，在CAS模式下，如果spinlock的值为1，说明其处在空闲状态，其它等待进程可以获取这个锁，而在此之前其余任何想要获得spinlock的CPU都会一直等待。</p>
 <p>&emsp;实际上，spinlock的值还有可能为负数，其值越负，表示对于spinlock的争夺越激烈。</p>
 <p>&emsp;采用上述模式的spinlock是不公平的，当owner释放锁时，锁的等待者需要发起竞争，而这种机制无法保证等待时间最长的CPU能够优先获得锁，同时激烈的竞争会增加总线的开销。</p>
 <p>&emsp;<strong>2.排队自旋锁</strong></p>
 <p>&emsp;在现代自旋锁中，采用q_spinlock结构实现spinlock：</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">qspinlock</span> &#123;</span></span><br><span class="line">    <span class="class"><span class="keyword">union</span> &#123;</span></span><br><span class="line">        <span class="keyword">atomic_t</span> val;</span><br><span class="line"></span><br><span class="line">        <span class="comment">/*</span></span><br><span class="line"><span class="comment">         * By using the whole 2nd least significant byte for the</span></span><br><span class="line"><span class="comment">         * pending bit, we can allow better optimization of the lock</span></span><br><span class="line"><span class="comment">         * acquisition for the pending bit holder.</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">ifdef</span> __LITTLE_ENDIAN</span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> &#123;</span></span><br><span class="line">            u8  locked;</span><br><span class="line">            u8  pending;</span><br><span class="line">        &#125;;</span><br><span class="line">        <span class="class"><span class="keyword">struct</span> &#123;</span></span><br><span class="line">            u16 locked_pending;</span><br><span class="line">            u16 tail;</span><br><span class="line">        &#125;;</span><br><span class="line"><span class="meta">#<span class="meta-keyword">else</span></span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> &#123;</span></span><br><span class="line">            u16 tail;</span><br><span class="line">            u16 locked_pending;</span><br><span class="line">        &#125;;</span><br><span class="line">        <span class="class"><span class="keyword">struct</span> &#123;</span></span><br><span class="line">            u8  reserved[<span class="number">2</span>];</span><br><span class="line">            u8  pending;</span><br><span class="line">            u8  locked;</span><br><span class="line">        &#125;;</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line">    &#125;;</span><br><span class="line">&#125; <span class="keyword">arch_spinlock_t</span>;</span><br></pre></td></tr></table></figure></div>
+'''c
+    typedef struct qspinlock {
+        union {
+            atomic_t val;
 
+<pre><code>        /*
+         * By using the whole 2nd least significant byte for the
+         * pending bit, we can allow better optimization of the lock
+         * acquisition for the pending bit holder.
+         */
+#ifdef __LITTLE_ENDIAN
+        struct &#123;
+            u8  locked;
+            u8  pending;
+        &#125;;
+        struct &#123;
+            u16 locked_pending;
+            u16 tail;
+        &#125;;
+#else
+        struct &#123;
+            u16 tail;
+            u16 locked_pending;
+        &#125;;
+        struct &#123;
+            u8  reserved[2];
+            u8  pending;
+            u8  locked;
+        &#125;;
+#endif
+    &#125;;
+&#125; arch_spinlock_t;
+</code></pre>
+<p>‘’’</p>
 <p>&emsp;<strong>具体内容待补充</strong></p>
 <p>&emsp;ticket spinlock类似于排队叫号，采用FIFO的形式，可以保证公平。</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> &#123;</span></span><br><span class="line">    <span class="class"><span class="keyword">union</span> &#123;</span></span><br><span class="line">        u32 lock;</span><br><span class="line">        <span class="class"><span class="keyword">struct</span> __<span class="title">raw_tickets</span> &#123;</span></span><br><span class="line">            <span class="comment">/* little endian */</span></span><br><span class="line">            u16 owner;</span><br><span class="line">            u16 next;</span><br><span class="line">        &#125; tickets;</span><br><span class="line">    &#125;;</span><br><span class="line">&#125; <span class="keyword">arch_spinlock_t</span>;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">void</span> <span class="title">arch_spin_lock</span><span class="params">(<span class="keyword">arch_spinlock_t</span> *lock)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> tmp;</span><br><span class="line">    u32 newval;</span><br><span class="line">    <span class="keyword">arch_spinlock_t</span> lockval;</span><br><span class="line"></span><br><span class="line">    prefetchw(&amp;amp;lock-&amp;gt;slock);</span><br><span class="line">    __asm__ __volatile__(</span><br><span class="line">&amp;quot;<span class="number">1</span>: ldrex   %<span class="number">0</span>, [%<span class="number">3</span>]\n&amp;quot;   <span class="comment">// 读取锁的值赋给lockval</span></span><br><span class="line">&amp;quot;   add %<span class="number">1</span>, %<span class="number">0</span>, %<span class="number">4</span>\n&amp;quot; <span class="comment">// 将next字段++后赋给newval</span></span><br><span class="line">&amp;quot;   strex   %<span class="number">2</span>, %<span class="number">1</span>, [%<span class="number">3</span>]\n&amp;quot; <span class="comment">// 将新的值存在lock中，写入是否成功结果存入tmp</span></span><br><span class="line">&amp;quot;   teq %<span class="number">2</span>, #<span class="number">0</span>\n&amp;quot; <span class="comment">// 判断是否成功，不成功回到1重新执行</span></span><br><span class="line">&amp;quot;   bne <span class="number">1b</span>&amp;quot;</span><br><span class="line">    : &amp;quot;=&amp;amp;r&amp;quot; (lockval), &amp;quot;=&amp;amp;r&amp;quot; (newval), &amp;quot;=&amp;amp;r&amp;quot; (tmp)</span><br><span class="line">    : &amp;quot;r&amp;quot; (&amp;amp;lock-&amp;gt;slock), &amp;quot;I&amp;quot; (<span class="number">1</span> &amp;lt;&amp;lt; TICKET_SHIFT)</span><br><span class="line">    : &amp;quot;cc&amp;quot;);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 查询是否可以拿锁，如果next!=owner则说明已经有人持有锁，自旋</span></span><br><span class="line">    <span class="keyword">while</span> (lockval.tickets.next != lockval.tickets.owner) &#123;</span><br><span class="line">        wfe();    <span class="comment">//wait for event，让ARM核进入睡眠模式，直到有事件唤醒CPU</span></span><br><span class="line">                  <span class="comment">//附注：wfi:等待中断，wfe:等待事件</span></span><br><span class="line">        lockval.tickets.owner = READ_ONCE(lock-&amp;gt;tickets.owner);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    smp_mb();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">void</span> <span class="title">arch_spin_unlock</span><span class="params">(<span class="keyword">arch_spinlock_t</span> *lock)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    smp_mb();</span><br><span class="line">    lock-&amp;gt;tickets.owner++;</span><br><span class="line">    dsb_sev();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></div>
+'''c
+    typedef struct {
+        union {
+            u32 lock;
+            struct __raw_tickets {
+                /* little endian */
+                u16 owner;
+                u16 next;
+            } tickets;
+        };
+    } arch_spinlock_t;
 
+<pre><code>static inline void arch_spin_lock(arch_spinlock_t *lock)
+&#123;
+    unsigned long tmp;
+    u32 newval;
+    arch_spinlock_t lockval;
+
+    prefetchw(&amp;amp;lock-&amp;gt;slock);
+    __asm__ __volatile__(
+&amp;quot;1: ldrex   %0, [%3]\n&amp;quot;   // 读取锁的值赋给lockval
+&amp;quot;   add %1, %0, %4\n&amp;quot; // 将next字段++后赋给newval
+&amp;quot;   strex   %2, %1, [%3]\n&amp;quot; // 将新的值存在lock中，写入是否成功结果存入tmp
+&amp;quot;   teq %2, #0\n&amp;quot; // 判断是否成功，不成功回到1重新执行
+&amp;quot;   bne 1b&amp;quot;
+    : &amp;quot;=&amp;amp;r&amp;quot; (lockval), &amp;quot;=&amp;amp;r&amp;quot; (newval), &amp;quot;=&amp;amp;r&amp;quot; (tmp)
+    : &amp;quot;r&amp;quot; (&amp;amp;lock-&amp;gt;slock), &amp;quot;I&amp;quot; (1 &amp;lt;&amp;lt; TICKET_SHIFT)
+    : &amp;quot;cc&amp;quot;);
+
+    // 查询是否可以拿锁，如果next!=owner则说明已经有人持有锁，自旋
+    while (lockval.tickets.next != lockval.tickets.owner) &#123;
+        wfe();    //wait for event，让ARM核进入睡眠模式，直到有事件唤醒CPU
+                  //附注：wfi:等待中断，wfe:等待事件
+        lockval.tickets.owner = READ_ONCE(lock-&amp;gt;tickets.owner);
+    &#125;
+
+    smp_mb();
+&#125;
+
+static inline void arch_spin_unlock(arch_spinlock_t *lock)
+&#123;
+    smp_mb();
+    lock-&amp;gt;tickets.owner++;
+    dsb_sev();
+&#125;
+</code></pre>
+<p>‘’’</p>
 <p>&emsp;在ticket spinlock机制中，spinlock被分割成owner和next两部分，其中owner为当前正在被服务的编号，而next为最后发出的编号。详细的实现机制见代码注释。</p>
 <p>&emsp;附注：_asm_表示插入汇编语言程序，_volatile_表示阻止编译器对该值进行优化，确保变量使用了用户定义的精确地址而非装有同一信息的别名。上述方法中的smp_mb( )为多处理器读写屏障，确保内存访问按照程序顺序完成。</p>
 <p>&emsp;ticket spinlock有一个问题，当spinlock的值被更改的时候，所有试图获取spinlock的CPU都需要更新cache中的spinlock内容，而实际上只有最先到达的CPU更新spinlock才有意义，由此导致额外开销。</p>
 <p>&emsp;<strong>3.MCS lock</strong></p>
-<p>&emsp;奋斗中......</p>
+<p>&emsp;现在我们把目光转向MCS锁。前文我们介绍spinlock已经有了较高的性能和较好的可拓展性，且基于ticketlock 实现的spinlock也解决了公平性的问题，那为什么我们还需要引入MCS锁呢？其实，spinlock有一个较为严重的问题，就是它是在一个变量上自旋的，这就导致在多处理器系统中，每个试图获取该锁的进程都将把该变量所在位置的缓存行读入本地CPU的cache中，使得该cache行进行频繁的换入换出操作，效率大幅下降。且每次的读写操作都必须在多个处理器缓存之间进行缓存同步，导致繁重的系统总线和内存的流量，大大降低系统整体的性能。</p>
+<p>&emsp;为了解决这个问题，内核社区的专家们设计出了MCS算法。MCS算法的最大不同点在于锁的申请者在本地的CPU变量上自旋，而不是在全局变量上。OSQ锁(optimistic_spin_lock)是MCS锁的一种具体实现，我们现在来看看它的实现机制。</p>
+<p>基本结构：</p>
+<p>&emsp;OSQ锁的实现需要以下两个基本的数据结构：</p>
+'''c
+    &lt;/include/linux/osq_lock.h&gt;
+
+<pre><code>struct optimistic_spin_node &#123;
+    struct optimistic_spin_node *next, *prev;
+    int locked; /* 1 if lock acquired */
+    int cpu; /* encoded CPU # + 1 value */
+&#125;;
+
+struct optimistic_spin_queue &#123;
+    /*
+     * Stores an encoded value of the CPU # of the tail node in the queue.
+     * If the queue is empty, then it&#39;s set to OSQ_UNLOCKED_VAL.
+     */
+    atomic_t tail;
+&#125;;
+</code></pre>
+<p>‘’’</p>
+<p>&emsp;optimistic_spin_node是一个per-CPU变量，每个CPU上都有一个本地的结点结构，该结构被组织成一个包含next和prev指针的双向链表；locked表示加锁状态，如果其为1表示该结点所对应的CPU正持有该锁；而cpu成员则指示该结点所在的是哪一个cpu，但其值并不是简单地等于CPU编号，而是在其基础上加1，后文中还会提到。</p>
+<p>&emsp;而optimistic_spin_queue中只有一个成员变量tail，用于记录等待队列中最后一个CPU结点，其值为该CPU的编号加1，如果队列为空，则tail将会被置为0(OSQ_UNLOCKED_VAL)。</p>
+<p>初始化：</p>
+'''c
+    &lt;/include/linux/osq_lock.h&gt;
+
+<pre><code>static inline void osq_lock_init(struct optimistic_spin_queue *lock)
+&#123;
+    atomic_set(&amp;amp;lock-&amp;gt;tail, OSQ_UNLOCKED_VAL);
+&#125;
+</code></pre>
+<p>‘’’</p>
+<p>&emsp;OSQ锁的初始化较为简单，只需把队列中的tail变量置为0即可。</p>
+<p>OSQ锁的申请：</p>
+<p>&emsp;OSQ锁的申请是通过osq_lock()函数进行的，其具有三种申请通道，分别是快速申请通道、中速申请通道和慢速申请通道，分别对应于不同的OSQ锁的状态，下面我们进行一一分析。</p>
+<p>&emsp;osq_lock()中对应的快速申请通道的代码如下。</p>
+'''c
+    &lt;/kernel/locking/osq_lock.c&gt;
+
+<pre><code>bool osq_lock(struct optimistic_spin_queue *lock)
+&#123;
+    struct optimistic_spin_node *node = this_cpu_ptr(&amp;amp;osq_node);
+    struct optimistic_spin_node *prev, *next;
+    int curr = encode_cpu(smp_processor_id());
+    int old;
+
+    node-&amp;gt;locked = 0;
+    node-&amp;gt;next = NULL;
+    node-&amp;gt;cpu = curr;
+
+    /*
+     * We need both ACQUIRE (pairs with corresponding RELEASE in
+     * unlock() uncontended, or fastpath) and RELEASE (to publish
+     * the node fields we just initialised) semantics when updating
+     * the lock tail.
+     */
+    old = atomic_xchg(&amp;amp;lock-&amp;gt;tail, curr);
+    if (old == OSQ_UNLOCKED_VAL)
+        return true;
+
+...
+&#125;
+</code></pre>
+<p>‘’’</p>
+<p>&emsp;node指向当前CPU的optimistic_spin_node结构，curr是当前CPU编号再加1，后面赋值给node中的cpu变量。这里我们进行一下说明，encode_cpu()的代码如下，即将目前CPU的编号加1。因为CPU的编号是从0开始的，而OSQ锁的cpu变量需要用0来表示没有CPU，所以用1来表示CPU0，以此类推。</p>
+'''c
+    &lt;/kernel/locking/osq_lock.c&gt;
+
+<pre><code>static inline int encode_cpu(int cpu_nr)
+&#123;
+    return cpu_nr + 1;
+&#125;
+</code></pre>
+<p>‘’’</p>
+<p>&emsp;在进行一些初始化操作后，调用原子操作atomic_xchg原子地把lock-&gt;tail的值设为到curr并返回lock-&gt;tail的原值，放入old中。此时，如果old的值为0(OSQ_UNLOCKED_VAL)，则说明在此之前的OSQ队列为空，此时即可直接获取该锁，返回true，至此完成快速申请。而如果old不为OSQ_UNLOCKED_VAL，则说明该锁在在其他CPU上，此时不能直接获取该锁，进入中速申请通道。</p>
+'''c
+    &lt;osq_lock()&gt;
+
+<pre><code>prev = decode_cpu(old);
+    node-&amp;gt;prev = prev;
+
+    smp_wmb();
+
+    WRITE_ONCE(prev-&amp;gt;next, node);
+
+    /*
+     * Normally @prev is untouchable after the above store; because at that
+     * moment unlock can proceed and wipe the node element from stack.
+     *
+     * However, since our nodes are static per-cpu storage, we&#39;re
+     * guaranteed their existence -- this allows us to apply
+     * cmpxchg in an attempt to undo our queueing.
+     */
+
+    while (!READ_ONCE(node-&amp;gt;locked)) &#123;
+        /*
+         * If we need to reschedule bail... so we can block.
+         * Use vcpu_is_preempted() to avoid waiting for a preempted
+         * lock holder:
+         */
+        if (need_resched() || vcpu_is_preempted(node_cpu(node-&amp;gt;prev)))
+            goto unqueue;
+
+        cpu_relax();
+    &#125;
+    return true;
+
+...
+</code></pre>
+<p>‘’’</p>
+<p>&emsp;进入中速申请通道则表示前面已经有CPU在持有或等待该锁了，所以首先应该将此CPU的optimistic<em>spin</em>node加入到链表当中，以排队进行等待，代码前四句即进行此操作。这里的smp_wmb()是前文所介绍的内存屏障，为了避免读写一致性产生的问题。</p>
+<p>&emsp;然后，通过while循环一直查询node的locked变量是否变为1，因为前一结点释放锁时会把下一结点的locked变量置为1，理想情况下，while循环在locked变量被置为1时退出，成功获取锁并返回true，此时中速申请通道完成。</p>
+<p>&emsp;但是，在进程自旋等待的过程中，如果该进程被调度器调度出去了(need_resched())或者被更高优先级的进程抢占(vcpu_is_preempted())，此时将跳转到unqueue标签中，以执行退出MCS链表、放弃自旋等待操作，此即慢速申请通道。</p>
+'''c
+    &lt;osq_lock()&gt;
+
+<pre><code>unqueue:
+    /*
+     * Step - A  -- stabilize @prev
+     *
+     * Undo our @prev-&amp;gt;next assignment; this will make @prev&#39;s
+     * unlock()/unqueue() wait for a next pointer since @lock points to us
+     * (or later).
+     */
+
+    for (;;) &#123;
+        if (prev-&amp;gt;next == node &amp;amp;&amp;amp;
+        cmpxchg(&amp;amp;prev-&amp;gt;next, node, NULL) == node)
+            break;
+
+        /*
+         * We can only fail the cmpxchg() racing against an unlock(),
+         * in which case we should observe @node-&amp;gt;locked becomming
+         * true.
+         */
+        if (smp_load_acquire(&amp;amp;node-&amp;gt;locked))
+            return true;
+
+        cpu_relax();
+
+        /*
+         * Or we race against a concurrent unqueue()&#39;s step-B, in which
+         * case its step-C will write us a new @node-&amp;gt;prev pointer.
+         */
+        prev = READ_ONCE(node-&amp;gt;prev);
+    &#125;
+</code></pre>
+<p>‘’’</p>
+<p>&emsp;为了从MCS链表中删除结点，我们首先解除前一结点的next指针的指向。如果目前前继结点的next指针仍然指向当前结点，则说明在此期间链表还没有被修改，此时直接原子地把前继结点的next指针指向NULL即完成了第一步操作；如果前继结点的next指针不指向当前结点，则说明链表此时已经发生了变化，这里的变化可能有两种，一种是前继结点持有锁后释放，此时锁将传递给当前结点，这时的smp_load_acquire()函数将判断是否发生了这种情况，如果是的话将直接返回true。另一种情况则较隐蔽一些，其实可能这时前继结点也因为调度或抢占等原因离开了链表，所以此时要重新读入prev指针，并再度进入循环，重复这些操作。</p>
+<p>&emsp;然后，我们要解除当前结点的next指针的指向。</p>
+'''c
+    &lt;osq_lock()&gt;
+
+<pre><code>/*
+     * Step - B -- stabilize @next
+     *
+     * Similar to unlock(), wait for @node-&amp;gt;next or move @lock from @node
+     * back to @prev.
+     */
+
+    next = osq_wait_next(lock, node, prev);
+    if (!next)
+        return false;
+</code></pre>
+<p>‘’’</p>
+<p>&emsp;这里的关键在于osq_wait_next()函数，其代码如下：</p>
+'''c
+    &lt;/kernel/locking/osq_lock.c&gt;
+
+<pre><code>static inline struct optimistic_spin_node *
+osq_wait_next(struct optimistic_spin_queue *lock,
+      struct optimistic_spin_node *node,
+      struct optimistic_spin_node *prev)
+&#123;
+    struct optimistic_spin_node *next = NULL;
+    int curr = encode_cpu(smp_processor_id());
+    int old;
+
+    /*
+     * If there is a prev node in queue, then the &#39;old&#39; value will be
+     * the prev node&#39;s CPU #, else it&#39;s set to OSQ_UNLOCKED_VAL since if
+     * we&#39;re currently last in queue, then the queue will then become empty.
+     */
+    old = prev ? prev-&amp;gt;cpu : OSQ_UNLOCKED_VAL;
+
+    for (;;) &#123;
+        if (atomic_read(&amp;amp;lock-&amp;gt;tail) == curr &amp;amp;&amp;amp;
+        atomic_cmpxchg_acquire(&amp;amp;lock-&amp;gt;tail, curr, old) == curr) &#123;
+            /*
+             * We were the last queued, we moved @lock back. @prev
+             * will now observe @lock and will complete its
+             * unlock()/unqueue().
+             */
+            break;
+        &#125;
+
+        /*
+         * We must xchg() the @node-&amp;gt;next value, because if we were to
+         * leave it in, a concurrent unlock()/unqueue() from
+         * @node-&amp;gt;next might complete Step-A and think its @prev is
+         * still valid.
+         *
+         * If the concurrent unlock()/unqueue() wins the race, we&#39;ll
+         * wait for either @lock to point to us, through its Step-B, or
+         * wait for a new @node-&amp;gt;next from its Step-C.
+         */
+        if (node-&amp;gt;next) &#123;
+            next = xchg(&amp;amp;node-&amp;gt;next, NULL);
+            if (next)
+                break;
+        &#125;
+
+        cpu_relax();
+    &#125;
+
+    return next;
+&#125;
+</code></pre>
+<p>‘’’</p>
+<p>&emsp;这里的old值是前继结点所在的CPU编号加1，若前继结点不存在，则old被置为OSQ_UNLOCKED_VAL。下面的for循环通过原子地判断lock-&gt;tail是否等于curr从而判断当前结点是否是链表中最后一个结点，如果是的话则将lock-&gt;tail设为old并直接退出循环，返回next（此时next为刚开始赋值的NULL）。</p>
+<p>&emsp;如果当前结点不是链表中的最后一个结点，则将当前结点的next置为NULL，并获取到下一结点并赋值给开始时定义的临时变量next。这时还要判断一下next是否存在，因为可能刚才下一结点还在，但将其赋给next前又离开了链表，这时就要再度进入循环，直至成功获取到下一结点或当前结点成为了最后一个结点。</p>
+<p>&emsp;这时，再回到osq_lock()函数中，我们就完成了解除当前结点的next指向这一步骤了。</p>
+<p>&emsp;接下来还有最后一步，就是把前继结点的next指针指向后继结点，后继结点的prev指针指向前继结点，相比前面的一大堆代码，这一步可就简单多了，如下所示：</p>
+'''c
+    &lt;osq_lock()&gt;
+
+<pre><code>WRITE_ONCE(next-&amp;gt;prev, prev);
+    WRITE_ONCE(prev-&amp;gt;next, next);
+
+    return false;
+</code></pre>
+<p>‘’’</p>
+<p>&emsp;好了，那么我们OSQ锁的申请方式至此就已经剖析完毕了，此时自然就到了我们的释放方式。</p>
+<p>OSQ锁的释放：</p>
+<p>&emsp;OSQ锁的释放通过函数osq_unlock()来实现，代码如下：</p>
+'''c
+    &lt;/kernel/locking/osq_lock.c&gt;
+
+<pre><code>void osq_unlock(struct optimistic_spin_queue *lock)
+&#123;
+    struct optimistic_spin_node *node, *next;
+    int curr = encode_cpu(smp_processor_id());
+
+    /*
+     * Fast path for the uncontended case.
+     */
+    if (likely(atomic_cmpxchg_release(&amp;amp;lock-&amp;gt;tail, curr,
+                      OSQ_UNLOCKED_VAL) == curr))
+        return;
+
+    /*
+     * Second most likely case.
+     */
+    node = this_cpu_ptr(&amp;amp;osq_node);
+    next = xchg(&amp;amp;node-&amp;gt;next, NULL);
+    if (next) &#123;
+        WRITE_ONCE(next-&amp;gt;locked, 1);
+        return;
+    &#125;
+
+    next = osq_wait_next(lock, node, NULL);
+    if (next)
+        WRITE_ONCE(next-&amp;gt;locked, 1);
+&#125;
+</code></pre>
+<p>‘’’</p>
+<p>&emsp;OSQ锁的释放有快速通道和慢速通道。快速通道依旧容易，即后面无其他结点在等待，此时lock-&gt;tail等于curr，故只要把lock-&gt;tail设置为OSQ_UNLOCKED_VAL即可完成释放。</p>
+<p>&emsp;如果后面有结点在等待，此时用xchg()函数把node-&gt;next置为NULL，并将后继结点赋给next，若next值不为空，则直接把next的locked值置为1，表示锁已经传递给该结点了；若next为空，则表示下一结点在当前结点释放锁的过程中离开了链表，那么此时就要调用osq_wait_next()来确定后继结点，然后再将锁传递给它。</p>
+<p>总结：</p>
+<p>&emsp;到了这里，MCS算法的一种具体实现——OSQ就介绍完毕了，核心就是osq_lock()和osq_unlock()，这里我们画了两张流程图来帮助说明回顾这一系列过程，如下所示：</p>
+
+<p><img src="/2022/05/11/Linux_Learning/MCS1.png"></p>
+<p><img src="/2022/05/11/Linux_Learning/MCS2.png"></p>
+<p>&emsp;值得注意的是，OSQ锁的虽然实现精妙、设计精炼，但其数据结构相对于仅占32位的ticket spinlock和qspinlock来说太大了，要多一个指针，意味着其大小将是它们的两倍，而有很多数据结构都会内嵌spinlock，而其中有一些数据结构对大小很敏感，故OSQ锁无法在spinlock上应用，而只在互斥锁和读写信号量上得到使用。</p>
+<p>&emsp;而与OSQ锁不同的是，下文所介绍的在MCS算法上进行改进而得到的qspinlock在Linux中有着相当广泛的应用，那我们看看qspinlock究竟是什么东西吧.</p>
 <h3>Mutex 互斥锁</h3>
 <ul>
 <li>Mutex是在原子操作API基础上实现信号量的行为</li>
@@ -343,10 +1015,35 @@
 </ul>
 <h4>互斥锁实现</h4>
 <p>&emsp;<strong>1.互斥锁结构</strong></p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">mutex</span> &#123;</span></span><br><span class="line">    <span class="keyword">atomic_long_t</span>       owner;</span><br><span class="line">    <span class="keyword">raw_spinlock_t</span>      wait_lock;</span><br><span class="line"><span class="meta">#<span class="meta-keyword">ifdef</span> CONFIG_MUTEX_SPIN_ON_OWNER</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">optimistic_spin_queue</span> <span class="title">osq</span>;</span> <span class="comment">/* Spinner MCS lock */</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">list_head</span>    <span class="title">wait_list</span>;</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">ifdef</span> CONFIG_DEBUG_MUTEXES</span></span><br><span class="line">    <span class="keyword">void</span>            *magic;</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">ifdef</span> CONFIG_DEBUG_LOCK_ALLOC</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">lockdep_map</span>  <span class="title">dep_map</span>;</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure></div>
+'''c
+    struct mutex {
+        atomic_long_t       owner;
+        raw_spinlock_t      wait_lock;
+    #ifdef CONFIG_MUTEX_SPIN_ON_OWNER
+        struct optimistic_spin_queue osq; /* Spinner MCS lock */
+    #endif
+        struct list_head    wait_list;
+    #ifdef CONFIG_DEBUG_MUTEXES
+        void            *magic;
+    #endif
+    #ifdef CONFIG_DEBUG_LOCK_ALLOC
+        struct lockdep_map  dep_map;
+    #endif
+    };
+'''
 
 <p>&emsp;atomic_long_t-&gt;int count，所描述的owner为原子计数，当owner为0时表示锁没有被持有，反之则锁被持有；wait_list为等待队列；wait_lock则为自旋锁，用以保护wait_list。</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * @owner: contains: &#x27;struct task_struct *&#x27; to the current lock owner,</span></span><br><span class="line"><span class="comment"> * NULL means not owned. Since task_struct pointers are aligned at</span></span><br><span class="line"><span class="comment"> * at least L1_CACHE_BYTES, we have low bits to store extra state.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * Bit0 indicates a non-empty waiter list; unlock must issue a wakeup.</span></span><br><span class="line"><span class="comment"> * Bit1 indicates unlock needs to hand the lock to the top-waiter</span></span><br><span class="line"><span class="comment"> * Bit2 indicates handoff has been done and we&#x27;re waiting for pickup.</span></span><br><span class="line"><span class="comment"> */</span></span><br></pre></td></tr></table></figure></div>
+'''c
+    /*
+     * @owner: contains: 'struct task_struct *' to the current lock owner,
+     * NULL means not owned. Since task_struct pointers are aligned at
+     * at least L1_CACHE_BYTES, we have low bits to store extra state.
+     *
+     * Bit0 indicates a non-empty waiter list; unlock must issue a wakeup.
+     * Bit1 indicates unlock needs to hand the lock to the top-waiter
+     * Bit2 indicates handoff has been done and we're waiting for pickup.
+     */
+'''
 
 <p>&emsp;在mutex中，owner可以被划分为两个域：63bit至3bit存放锁的持有者task_struct地址，而2bit至0bit存放锁的状态：bit0表示wait_list是否为空，bit1表示释放锁的时候需要把锁交给第一等待者，而bit2表示handoff已经完成，等待task域来占用锁。</p>
 <p>&emsp;网络上关于mutex设计的几个概念的解释：</p>
@@ -362,34 +1059,122 @@
 <p><br>&emsp;<strong>2.互斥锁使用</strong></p>
 <p>初始化</p>
 <p>&emsp;方法一：</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> DEFINE_MUTEX(mutexname) \</span></span><br><span class="line"><span class="meta">    struct mutex mutexname = __MUTEX_INITIALIZER(mutexname)</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> __MUTEX_INITIALIZER(lockname) \</span></span><br><span class="line"><span class="meta">        &#123; .owner = ATOMIC_LONG_INIT(0) \</span></span><br><span class="line"><span class="meta">        , .wait_lock = __RAW_SPIN_LOCK_UNLOCKED(lockname.wait_lock) \</span></span><br><span class="line"><span class="meta">        , .wait_list = LIST_HEAD_INIT(lockname.wait_list) \</span></span><br><span class="line"><span class="meta">        __DEBUG_MUTEX_INITIALIZER(lockname) \</span></span><br><span class="line"><span class="meta">        __DEP_MAP_MUTEX_INITIALIZER(lockname) &#125;</span></span><br></pre></td></tr></table></figure></div>
+'''c
+    #define DEFINE_MUTEX(mutexname) \
+        struct mutex mutexname = __MUTEX_INITIALIZER(mutexname)
 
+<pre><code>#define __MUTEX_INITIALIZER(lockname) \
+        &#123; .owner = ATOMIC_LONG_INIT(0) \
+        , .wait_lock = __RAW_SPIN_LOCK_UNLOCKED(lockname.wait_lock) \
+        , .wait_list = LIST_HEAD_INIT(lockname.wait_list) \
+        __DEBUG_MUTEX_INITIALIZER(lockname) \
+        __DEP_MAP_MUTEX_INITIALIZER(lockname) &#125;
+</code></pre>
+<p>‘’’</p>
 <p>&emsp;上述定义将owner值置为0（unlock），同时初始化等待队列对应的自旋锁和等待队列本身。</p>
 <p>&emsp;方法二：</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> mutex_init(mutex)                       \</span></span><br><span class="line"><span class="meta">do &#123;                                    \</span></span><br><span class="line"><span class="meta">    static struct lock_class_key __key;             \</span></span><br><span class="line"><span class="meta">                                    \</span></span><br><span class="line"><span class="meta">    __mutex_init((mutex), #mutex, &amp;amp;__key);              \</span></span><br><span class="line"><span class="meta">&#125; while (0)</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">void</span> __mutex_init(struct mutex *lock, <span class="keyword">const</span> <span class="keyword">char</span> *name, struct lock_class_key *key)</span><br><span class="line">&#123;</span><br><span class="line">    atomic_long_set(&amp;amp;lock-&amp;gt;owner, <span class="number">0</span>);</span><br><span class="line">    raw_spin_lock_init(&amp;amp;lock-&amp;gt;wait_lock);</span><br><span class="line">    INIT_LIST_HEAD(&amp;amp;lock-&amp;gt;wait_list);</span><br><span class="line"><span class="meta">#<span class="meta-keyword">ifdef</span> CONFIG_MUTEX_SPIN_ON_OWNER</span></span><br><span class="line">    osq_lock_init(&amp;amp;lock-&amp;gt;osq);</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line"></span><br><span class="line">    debug_mutex_init(lock, name, key);</span><br><span class="line">&#125;</span><br><span class="line">EXPORT_SYMBOL(__mutex_init);</span><br></pre></td></tr></table></figure></div>
+'''c
+    #define mutex_init(mutex)                       \
+    do {                                    \
+        static struct lock_class_key __key;             \
+                                        \
+        __mutex_init((mutex), #mutex, &amp;__key);              \
+    } while (0)
 
+<pre><code>void __mutex_init(struct mutex *lock, const char *name, struct lock_class_key *key)
+&#123;
+    atomic_long_set(&amp;amp;lock-&amp;gt;owner, 0);
+    raw_spin_lock_init(&amp;amp;lock-&amp;gt;wait_lock);
+    INIT_LIST_HEAD(&amp;amp;lock-&amp;gt;wait_list);
+#ifdef CONFIG_MUTEX_SPIN_ON_OWNER
+    osq_lock_init(&amp;amp;lock-&amp;gt;osq);
+#endif
+
+    debug_mutex_init(lock, name, key);
+&#125;
+EXPORT_SYMBOL(__mutex_init);
+</code></pre>
+<p>‘’’</p>
 <p>&emsp;上述操作调用atomic_long_set将owner置为0，同时初始化了自旋锁和等待队列。</p>
 <p>&emsp;两种初始化方法的差别在于，DEFINE_MUTEX是定义并初始化互斥锁，可以用来定义全局互斥锁，而mutex_init则是对已经分配空间的互斥锁进行初始化操作，只能针对堆区内已经分配空间的互斥锁对象进行初始化操作。因此，DEFINE_MUTEX(name)可用于静态定义互斥锁，而mutex_init(&amp;mutex)则可用于互斥锁的动态初始化。</p>
 <p>&emsp;请求持有互斥锁：</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> __sched <span class="title">mutex_lock</span><span class="params">(struct mutex *lock)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    might_sleep();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (!__mutex_trylock_fast(lock))</span><br><span class="line">        __mutex_lock_slowpath(lock);</span><br><span class="line">&#125;</span><br><span class="line">EXPORT_SYMBOL(mutex_lock);</span><br></pre></td></tr></table></figure></div>
+'''c
+    void __sched mutex_lock(struct mutex *lock)
+    {
+        might_sleep();
 
+<pre><code>    if (!__mutex_trylock_fast(lock))
+        __mutex_lock_slowpath(lock);
+&#125;
+EXPORT_SYMBOL(mutex_lock);
+</code></pre>
+<p>‘’’</p>
 <p>&emsp;上述操作为指定的mutex上锁，如果锁不可用则睡眠。具体来看，上锁过程中使用了两种方法：__mutex_trylock_fast和__mutex_lock_slowpath，这样做的目的是为了减轻fastpath的压力。fastpath和slowpath具体代码如下：</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">static</span> __always_inline <span class="keyword">bool</span> __mutex_trylock_fast(struct mutex *lock)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> curr = (<span class="keyword">unsigned</span> <span class="keyword">long</span>)current;</span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> zero = <span class="number">0UL</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (atomic_long_try_cmpxchg_acquire(&amp;amp;lock-&amp;gt;owner, &amp;amp;zero, curr))</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">void</span> __sched __mutex_lock_slowpath(struct mutex *lock);</span><br><span class="line"></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">int</span> __sched __mutex_lock(struct mutex *lock, <span class="keyword">unsigned</span> <span class="keyword">int</span> state, <span class="keyword">unsigned</span> <span class="keyword">int</span> subclass,</span><br><span class="line">     struct lockdep_map *nest_lock, <span class="keyword">unsigned</span> <span class="keyword">long</span> ip)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">return</span> __mutex_lock_common(lock, state, subclass, nest_lock, ip, <span class="literal">NULL</span>, <span class="literal">false</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></div>
+'''c
+    static __always_inline bool __mutex_trylock_fast(struct mutex *lock)
+    {
+        unsigned long curr = (unsigned long)current;
+        unsigned long zero = 0UL;
 
+<pre><code>    if (atomic_long_try_cmpxchg_acquire(&amp;amp;lock-&amp;gt;owner, &amp;amp;zero, curr))
+        return true;
+
+    return false;
+&#125;
+
+static void __sched __mutex_lock_slowpath(struct mutex *lock);
+
+static int __sched __mutex_lock(struct mutex *lock, unsigned int state, unsigned int subclass,
+     struct lockdep_map *nest_lock, unsigned long ip)
+&#123;
+    return __mutex_lock_common(lock, state, subclass, nest_lock, ip, NULL, false);
+&#125;
+</code></pre>
+<p>‘’’</p>
 <p>&emsp;slowpath的具体实现比较复杂，没有完全看懂，后面再仔细看看。</p>
 <p>&emsp;当锁没有被任何进程持有时(&amp;lock-&gt;owner==&amp;zero)，就让owner等于获取锁的进程的task_struct地址，在这种情况下会走fastpath;而当请求的锁处于被持有的状态时，则会走slowpath。对于fastpath和slowpath的作用，kernelnewbies上有进一步的宏观解释：“In linux you will find many places that split things into a &quot;simple,
 common fast&quot; part and a &quot;slower, more complex rare part&quot;. This allows
 for fast and simple normal performance while you can do the more complex
 stuff without having to tweak every last cycle out of it.&quot;</p>
 <p>&emsp;为指定mutex解锁：</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> __sched <span class="title">mutex_unlock</span><span class="params">(struct mutex *lock)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line"><span class="meta">#<span class="meta-keyword">ifndef</span> CONFIG_DEBUG_LOCK_ALLOC</span></span><br><span class="line">    <span class="keyword">if</span> (__mutex_unlock_fast(lock))</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line">    __mutex_unlock_slowpath(lock, _RET_IP_);</span><br><span class="line">&#125;</span><br><span class="line">EXPORT_SYMBOL(mutex_unlock);</span><br></pre></td></tr></table></figure></div>
+'''c
+    void __sched mutex_unlock(struct mutex *lock)
+    {
+    #ifndef CONFIG_DEBUG_LOCK_ALLOC
+        if (__mutex_unlock_fast(lock))
+            return;
+    #endif
+        __mutex_unlock_slowpath(lock, _RET_IP_);
+    }
+    EXPORT_SYMBOL(mutex_unlock);
+'''
 
 <p>&emsp;同样的，解锁过程也采用了fastpath和slowpath两种途径，思路参考上锁过程，这里就暂时不放具体代码了。</p>
 <p>&emsp;尝试无需等待地获取指定的mutex：</p>
-<div class="highlight-wrap"autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" contenteditable="true"data-rel="C"><figure class="iseeu highlight /c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> __sched <span class="title">mutex_trylock</span><span class="params">(struct mutex *lock)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">bool</span> locked;</span><br><span class="line"></span><br><span class="line">    MUTEX_WARN_ON(lock-&amp;gt;magic != lock);</span><br><span class="line"></span><br><span class="line">    locked = __mutex_trylock(lock);</span><br><span class="line">    <span class="keyword">if</span> (locked)</span><br><span class="line">        mutex_acquire(&amp;amp;lock-&amp;gt;dep_map, <span class="number">0</span>, <span class="number">1</span>, _RET_IP_);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> locked;</span><br><span class="line">&#125;</span><br><span class="line">EXPORT_SYMBOL(mutex_trylock);</span><br><span class="line"></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">bool</span> __mutex_trylock(struct mutex *lock)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">return</span> !__mutex_trylock_common(lock, <span class="literal">false</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></div>
+'''c
+    int __sched mutex_trylock(struct mutex *lock)
+    {
+        bool locked;
 
+<pre><code>    MUTEX_WARN_ON(lock-&amp;gt;magic != lock);
+
+    locked = __mutex_trylock(lock);
+    if (locked)
+        mutex_acquire(&amp;amp;lock-&amp;gt;dep_map, 0, 1, _RET_IP_);
+
+    return locked;
+&#125;
+EXPORT_SYMBOL(mutex_trylock);
+
+static inline bool __mutex_trylock(struct mutex *lock)
+&#123;
+    return !__mutex_trylock_common(lock, false);
+&#125;
+</code></pre>
+<p>‘’’</p>
 <p>&emsp;上式的lock为mutex尝试获取的锁。如果获取成功则返回1，否则返回0。</p>
 <p>未完待续。。。。。。</p>
+
 
 
 
@@ -487,7 +1272,7 @@ stuff without having to tweak every last cycle out of it.&quot;</p>
 
       <!--noindex-->
       <div class="post-toc-wrap sidebar-panel">
-          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link"><span class="nav-number">1.</span> <span class="nav-text">semaphore 信号量</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link"><span class="nav-number">1.1.</span> <span class="nav-text">信号量的实现</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link"><span class="nav-number">2.</span> <span class="nav-text">Spinlock 自旋锁</span></a></li><li class="nav-item nav-level-3"><a class="nav-link"><span class="nav-number">3.</span> <span class="nav-text">Mutex 互斥锁</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link"><span class="nav-number">3.1.</span> <span class="nav-text">互斥锁实现</span></a></li></ol></li></ol></div>
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link"><span class="nav-number">1.</span> <span class="nav-text">原子操作</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link"><span class="nav-number">1.1.</span> <span class="nav-text">a. 读原子操作</span></a></li><li class="nav-item nav-level-4"><a class="nav-link"><span class="nav-number">1.2.</span> <span class="nav-text">b. 加、减、与、或、异或的无返回值原子操作</span></a></li><li class="nav-item nav-level-4"><a class="nav-link"><span class="nav-number">1.3.</span> <span class="nav-text">c. 加、减、与、或、异或的有返回值原子操作</span></a></li><li class="nav-item nav-level-4"><a class="nav-link"><span class="nav-number">1.4.</span> <span class="nav-text">d. 原子交换</span></a></li><li class="nav-item nav-level-4"><a class="nav-link"><span class="nav-number">1.5.</span> <span class="nav-text">e. 处理引用计数的原子操作函数</span></a></li><li class="nav-item nav-level-4"><a class="nav-link"><span class="nav-number">1.6.</span> <span class="nav-text">f. 内嵌内存屏障原语的原子操作函数</span></a></li><li class="nav-item nav-level-4"><a class="nav-link"><span class="nav-number">1.7.</span> <span class="nav-text">g. cmpxchg() 函数</span></a></li><li class="nav-item nav-level-4"><a class="nav-link"><span class="nav-number">1.8.</span> <span class="nav-text">h. xchg() 函数</span></a></li><li class="nav-item nav-level-4"><a class="nav-link"><span class="nav-number">1.9.</span> <span class="nav-text">内存屏障</span></a></li><li class="nav-item nav-level-4"><a class="nav-link"><span class="nav-number">1.10.</span> <span class="nav-text">barrier() 函数</span></a></li><li class="nav-item nav-level-4"><a class="nav-link"><span class="nav-number">1.11.</span> <span class="nav-text">b. UP的读写内存屏障</span></a></li><li class="nav-item nav-level-4"><a class="nav-link"><span class="nav-number">1.12.</span> <span class="nav-text">c. SMP的读写内存屏障</span></a></li><li class="nav-item nav-level-4"><a class="nav-link"><span class="nav-number">1.13.</span> <span class="nav-text">d. 自旋等待的接口函数</span></a></li><li class="nav-item nav-level-4"><a class="nav-link"><span class="nav-number">1.14.</span> <span class="nav-text">d. 原子变量接口函数</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link"><span class="nav-number">2.</span> <span class="nav-text">semaphore 信号量</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link"><span class="nav-number">2.1.</span> <span class="nav-text">信号量的实现</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link"><span class="nav-number">3.</span> <span class="nav-text">Spinlock 自旋锁</span></a></li><li class="nav-item nav-level-3"><a class="nav-link"><span class="nav-number">4.</span> <span class="nav-text">Mutex 互斥锁</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link"><span class="nav-number">4.1.</span> <span class="nav-text">互斥锁实现</span></a></li></ol></li></ol></div>
       </div>
       <!--/noindex-->
 
@@ -564,12 +1349,12 @@ stuff without having to tweak every last cycle out of it.&quot;</p>
     <span class="post-meta-item-icon">
       <i class="fa fa-chart-area"></i>
     </span>
-    <span title="站点总字数">23k</span>
+    <span title="站点总字数">35k</span>
     <span class="post-meta-divider">|</span>
     <span class="post-meta-item-icon">
       <i class="fa fa-coffee"></i>
     </span>
-    <span title="站点阅读时长">21 分钟</span>
+    <span title="站点阅读时长">32 分钟</span>
 </div>
 
 
